@@ -1,90 +1,119 @@
-// src/components/staffs/EditStaff.jsx - WITH FIXED NAVIGATION (logs removed)
-import React, { useState, useEffect } from 'react';
+// src/components/super-admin/hospitals/staff/EditStaff.jsx
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-  ChevronRight,
-  Upload,
-  X,
-  Image,
-  Eye,
-  EyeOff,
-  Lock,
-  Shield,
-  ArrowLeft
+  Upload, X, Shield, ArrowLeft, Lock, Eye, EyeOff, Power,
+  User, Mail, Phone, Calendar, MapPin, AlertCircle,
+  Briefcase, GraduationCap, ChevronDown, Users, Home, Clock,
+  CreditCard, CheckCircle
 } from 'lucide-react';
+import { Button, Input, Alert } from '../../../ui';
+import CustomSelect from '../../../ui/CustomSelect';
+import DatePicker from '../../../ui/DatePicker';
 import {
-  Button,
-  Input,
-  Select,
-  Card,
-  Alert,
-  Switch
-} from '../../../ui';
-import { 
-  showAddToast, 
-  showSuccessToast, 
-  showErrorToast, 
-  showWarningToast,
-  showUpdateToast,
-  showDeleteToast
+  showUpdateToast, showSuccessToast,
+  showErrorToast, showWarningToast
 } from '../../../ui/Toast';
-import { 
-  useGetStaffByIdQuery,
-  useUpdateStaffMutation,
-  useDeleteStaffMutation,
-  useChangeStaffPasswordMutation
+
+import {
+  useGetStaffByIdQuery, useUpdateStaffMutation, useChangeStaffPasswordMutation
 } from '../../../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../../../app/service/role';
-import { getHospitalId, getAuthUser } from '../../../../utils/auth';
-import { uploadToS3 } from '../../../../../app/service/S3';
+// ✅ Pincode API integration (same as AddStaff model)
+import { useGetPincodeQuery } from '../../../../../app/service/pincodeApi';
+import { getAuthUser } from '../../../../utils/auth';
+import {
+  uploadToS3,
+  getS3ImageUrl,
+} from '../../../../../app/service/S3';
 
-// Helper to get full image URL with cache-busting.
-// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
-const getFullImageUrl = (imageKey) => {
-  if (!imageKey) return null;
+// ✅ Options for the Gender CustomSelect — capitalized values
+const GENDER_SELECT_OPTIONS = ['male', 'female', 'other'].map(g => ({
+  value: g.charAt(0).toUpperCase() + g.slice(1),
+  label: g.charAt(0).toUpperCase() + g.slice(1),
+}));
 
-  // Add a cache-buster so newly edited/uploaded images refresh.
-  const separator = imageKey.includes('?') ? '&' : '?';
-  return `${imageKey}${separator}t=${Date.now()}`;
+// Styling override so CustomSelect matches the inputs
+const SELECT_FORM_CLASS =
+  "[&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+
+// Helpers
+const getHospitalId = () => {
+  const stored = localStorage.getItem('hospitalId');
+  if (stored) return stored;
+  const authUser = getAuthUser();
+  return authUser?.hospitalId || null;
 };
 
-// Tabs Component
-const Tabs = ({ tabs, activeTab, onTabChange }) => (
-  <div className="border-b border-gray-200 px-6">
-    <nav className="-mb-px flex space-x-8">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          onClick={() => onTabChange(tab.id)}
-          className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-            activeTab === tab.id
-              ? 'border-[#1C62A0] text-[#1C62A0]'
-              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-          }`}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </nav>
-  </div>
-);
+const getAuthId = () => {
+  const authUser = getAuthUser();
+  return authUser?.id || authUser?.userId || authUser?._id || null;
+};
 
-// Password Input Component
-const PasswordInput = ({ 
-  label, 
-  name, 
-  value, 
-  onChange, 
-  onBlur, 
-  error, 
-  touched, 
-  showPassword, 
-  setShowPassword,
-  placeholder,
-  icon: Icon,
-  required
+// ✅ place is saved as "line 1, line 2, local area"
+const buildPlace = (...parts) =>
+  parts
+    .map(part => part?.trim())
+    .filter(Boolean)
+    .join(', ');
+
+const EMPTY_FORM = {
+  profileImage: null, imageUrl: null, imageKey: null,
+  name: '', gender: '', dob: '', phone: '', email: '',
+  designation: '', roleId: '', joiningDate: '', staffType: '',
+  jobType: '', knowLanguages: [], qualification: '',
+  // ✅ Pincode-based address
+  countryName: 'India', stateName: '', district: '', localArea: '',
+  pincode: '',
+  addressLine1: '', addressLine2: '',
+  password: '', confirmPassword: '', isActive: true,
+  shiftStartTime: '', shiftEndTime: ''
+};
+
+// Status Toggle Component
+const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
+  const isActive = status;
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+        <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+          <Power className="h-5 w-5 text-blue-600" />
+          Staff Status
+        </h3>
+      </div>
+      <div className="p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-gray-900">{isActive ? 'Active' : 'Inactive'}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {isActive
+                ? 'Staff is currently active'
+                : 'Staff is inactive and will not appear in search results'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={disabled}
+            className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+              isActive ? 'bg-green-500' : 'bg-gray-300'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-300 shadow-md ${
+              isActive ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// Password Input
+const PasswordInput = ({
+  label, name, value, onChange, onBlur, error, touched,
+  showPassword, setShowPassword, placeholder, icon: Icon, required
 }) => (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -94,156 +123,365 @@ const PasswordInput = ({
       {Icon && <Icon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />}
       <input
         type={showPassword ? "text" : "password"}
-        name={name}
-        value={value}
-        onChange={onChange}
-        onBlur={onBlur}
+        name={name} value={value} onChange={onChange} onBlur={onBlur}
         className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
           error && touched ? 'border-red-500' : 'border-gray-300'
         }`}
         placeholder={placeholder}
       />
-      <button
-        type="button"
-        onClick={() => setShowPassword(prev => !prev)}
-        className="absolute right-3 top-1/2 transform -translate-y-1/2"
-      >
+      <button type="button" onClick={() => setShowPassword(prev => !prev)}
+        className="absolute right-3 top-1/2 transform -translate-y-1/2">
         {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
       </button>
     </div>
-    {error && touched && (
-      <p className="mt-1 text-sm text-red-500">{error}</p>
+    {error && touched && <p className="mt-1 text-sm text-red-500">{error}</p>}
+    {name === 'password' && value && !error && (
+      <p className="text-xs text-green-600 mt-1">✓ Password is strong</p>
+    )}
+    {name === 'password' && value && error && (
+      <p className="text-xs text-red-600 mt-1">{error}</p>
+    )}
+    {name === 'password' && (
+      <p className="text-xs text-gray-400 mt-1">
+        Password must contain: 8+ chars, uppercase, lowercase, number & special character
+      </p>
     )}
   </div>
 );
 
+// ✅ Shift Time Input
+const ShiftTimeInput = ({
+  shiftStartTime, shiftEndTime, onChange, errors, touched, onBlur
+}) => {
+  const getDurationDisplay = () => {
+    if (!shiftStartTime || !shiftEndTime) return null;
+    const [startH, startM] = shiftStartTime.split(':').map(Number);
+    const [endH, endM] = shiftEndTime.split(':').map(Number);
+    let startMinutes = startH * 60 + startM;
+    let endMinutes = endH * 60 + endM;
+    if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+    const durationMinutes = endMinutes - startMinutes;
+    const hours = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+    return `${hours}h ${mins}m`;
+  };
+
+  const duration = getDurationDisplay();
+  const isOvernight = shiftStartTime && shiftEndTime && shiftEndTime <= shiftStartTime;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Shift Start Time <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="time"
+            name="shiftStartTime"
+            value={shiftStartTime}
+            onChange={onChange}
+            onBlur={onBlur}
+            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+              errors.shiftStartTime && touched.shiftStartTime ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.shiftStartTime && touched.shiftStartTime && (
+          <p className="mt-1 text-xs text-red-500">{errors.shiftStartTime}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Shift End Time <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="time"
+            name="shiftEndTime"
+            value={shiftEndTime}
+            onChange={onChange}
+            onBlur={onBlur}
+            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+              errors.shiftEndTime && touched.shiftEndTime ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.shiftEndTime && touched.shiftEndTime && (
+          <p className="mt-1 text-xs text-red-500">{errors.shiftEndTime}</p>
+        )}
+      </div>
+
+      {duration && (
+        <div className="md:col-span-2 flex items-center gap-2 flex-wrap -mt-2">
+          <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+            ⏱ Duration: {duration}
+          </span>
+          {isOvernight && (
+            <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              🌙 Overnight Shift
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ✅ Searchable dropdown for local area (post offices)
+const SearchableCityDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  required = false,
+  error = '',
+  touched = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.name);
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  const showError = touched && error;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : value}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm('');
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+        />
+      </div>
+
+      {isOpen && filteredOptions.length > 0 && (
+        <div
+          className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {filteredOptions.map((option, index) => (
+            <div
+              key={index}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
+    </div>
+  );
+};
+
+// Options
+const languageOptions = [
+  { value: 'English', label: 'English' },
+  { value: 'Spanish', label: 'Spanish' },
+  { value: 'French', label: 'French' },
+  { value: 'German', label: 'German' },
+  { value: 'Chinese', label: 'Chinese' },
+  { value: 'Japanese', label: 'Japanese' },
+  { value: 'Arabic', label: 'Arabic' },
+  { value: 'Hindi', label: 'Hindi' },
+  { value: 'Bengali', label: 'Bengali' },
+  { value: 'Portuguese', label: 'Portuguese' },
+  { value: 'Malayalam', label: 'Malayalam' },
+  { value: 'Tamil', label: 'Tamil' },
+  { value: 'Telugu', label: 'Telugu' },
+  { value: 'Kannada', label: 'Kannada' }
+];
+
+const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
+const jobTypes = ['Day Shift', 'Night Shift', 'Remote', 'Hybrid'];
+const staffTypes = ['Permanent', 'Contract', 'Temporary', 'Intern'];
+
+const SHIFT_TYPES_WITH_TIME = ['Day Shift', 'Night Shift'];
+
 const EditStaff = () => {
   const navigate = useNavigate();
-  const { id } = useParams();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('basic');
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [previewImage, setPreviewImage] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  
-  // FIX: Add state to force image refresh
-  const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
-  
-  // Password change states
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [passwordErrors, setPasswordErrors] = useState({});
-  const [passwordTouched, setPasswordTouched] = useState({});
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
-  
-  // Get hospital ID and hospital name from auth
-  const hospitalIdFromAuth = getHospitalId();
+
+  // ✅ Resolve: route param → location state → auth/localStorage
+  const { id: paramId } = useParams();
+  const staffId = paramId ? paramId.replace(/[^0-9]/g, '') : '';
+
+  const hospitalId = location.state?.hospitalId || getHospitalId();
   const authUser = getAuthUser();
+  const authId = getAuthId();
   const hospitalName = authUser?.name || '';
-  
-  // Get hospitalId from location state (passed from HospitalStaffList)
-  const hospitalId = location.state?.hospitalId || hospitalIdFromAuth;
-  
-  // Role assignment state
+
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
-  // Fetch roles from API
-  const {
-    data: rolesData,
-    isLoading: rolesLoading,
-  } = useGetRolesQuery({
-    hospitalId,
-    limit: 100
-  });
-  
-  // Extract roles from response - include admin role (id=2) and hospital-specific roles
+
+  const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery(
+    { hospitalId: hospitalId || undefined, limit: 100 },
+    { skip: !hospitalId }
+  );
+
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
-  
-  // API hooks - Use getStaffById for single staff fetch
-  const {
-    data: staffData,
-    isLoading: loading,
-    refetch
-  } = useGetStaffByIdQuery(
-    id,
-    { skip: !id }
-  );
-  
-  const [updateStaff, { isLoading: isUpdateLoading }] = useUpdateStaffMutation();
-  const [deleteStaff, { isLoading: isDeleteLoading }] = useDeleteStaffMutation();
-  const [changeStaffPassword, { isLoading: isPasswordLoading }] = useChangeStaffPasswordMutation();
 
-  const [formData, setFormData] = useState({
-    id: '',
-    originalId: '',
-    staffId: '',
-    name: '',
-    gender: 'Male',
-    dob: '',
-    mobile: '',
-    email: '',
-    designation: '',
-    roleId: '',
-    appointmentDate: '',
-    staffType: 'Permanent',
-    jobType: 'Full Time',
-    knowLanguages: [],
-    qualification: '',
-    addressLine1: '',
-    addressLine2: '',
-    city: '',
-    state: '',
-    country: '',
-    place: '',
-    pincode: '',
-    isActive: true,
-    profileImage: null,
-    imageUrl: null,
-    imageKey: '',
+  // ✅ Options for the Assign Role CustomSelect — string values for strict ===
+  const roleOptions = rolesList.map(role => ({
+    value: String(role.id),
+    label: role.name || role.roleName || String(role.id),
+  }));
+
+  const [formData, setFormData] = useState(EMPTY_FORM);
+
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [previewImage, setPreviewImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formInitialized, setFormInitialized] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
+
+  // Saved place string, kept until the pincode lookup runs once so the
+  // local area can be restored without being wiped.
+  // splitStreet = true when the saved place was built as "line 1, line 2, local area"
+  // and address lines were not stored separately.
+  const pendingPlaceRef = useRef({ place: '', splitStreet: false });
+
+  const { data: staffResponse, isLoading, error, refetch } = useGetStaffByIdQuery(staffId, { skip: !staffId });
+  const [updateStaff, { isLoading: isUpdateLoading }] = useUpdateStaffMutation();
+  const [changeStaffPassword, { isLoading: isPasswordChanging }] = useChangeStaffPasswordMutation();
+
+  const staff = staffResponse?.data?.staff || staffResponse?.staff || staffResponse?.data || staffResponse;
+
+  const requiresShiftTime = SHIFT_TYPES_WITH_TIME.includes(formData.jobType);
+
+  // ✅ Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(formData.pincode, {
+    skip: !/^\d{6}$/.test(formData.pincode),
   });
 
-  // Helper function to remove undefined values from an object
-  const removeUndefined = obj => {
-    Object.keys(obj).forEach(key => {
-      if (obj[key] === undefined) {
-        delete obj[key];
-      }
-    });
-    return obj;
-  };
+  const postOffices =
+    pincodeData?.[0]?.Status === 'Success'
+      ? pincodeData[0].PostOffice || []
+      : [];
 
-  // Get role name by ID for display
-  const getRoleNameById = (roleId) => {
-    const role = rolesList.find(r => String(r.id) === String(roleId));
-    return role?.name || role?.roleName || '';
-  };
+  // ✅ Automatically populate state and district (and restore the saved local area once)
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+      const names = postOffices.map(o => o.Name);
+      const pending = pendingPlaceRef.current;
+      pendingPlaceRef.current = { place: '', splitStreet: false };
 
-  // Get role badge color by role name
-  const getRoleBadgeColor = (roleId) => {
-    const roleName = getRoleNameById(roleId);
-    const roleNameLower = roleName?.toLowerCase();
-    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
-    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
-    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
-    return 'bg-gray-100 text-gray-700';
-  };
+      setFormData(prev => {
+        let line1 = prev.addressLine1;
 
-  // Helper function to format staff ID
+        // keep the current local area if it is still valid for this pincode
+        let local =
+          names.find(n => n.trim().toLowerCase() === (prev.localArea || '').trim().toLowerCase()) || '';
+
+        // otherwise try to restore it from the saved place string
+        if (!local && pending.place) {
+          const parts = pending.place.split(',').map(p => p.trim()).filter(Boolean);
+          const last = parts[parts.length - 1];
+          const match = last
+            ? names.find(n => n.trim().toLowerCase() === last.toLowerCase())
+            : null;
+          if (match) {
+            local = match;
+            if (pending.splitStreet) line1 = parts.slice(0, -1).join(', ');
+          }
+        }
+
+        return {
+          ...prev,
+          stateName: firstOffice.State,
+          district: firstOffice.District,
+          localArea: local,
+          addressLine1: line1
+        };
+      });
+    } else if (formData.pincode.length === 6 && pincodeData) {
+      pendingPlaceRef.current = { place: '', splitStreet: false };
+      setFormData(prev => ({
+        ...prev,
+        stateName: '',
+        district: '',
+        localArea: ''
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
+
   const formatStaffId = (id) => {
     if (!id) return '#SF0000';
     let numericId;
@@ -256,339 +494,499 @@ const EditStaff = () => {
     return `#SF${String(numericId).padStart(4, '0')}`;
   };
 
-  // Image validation helper
-  const validateImage = file => {
-    if (file.size > 5 * 1024 * 1024) {
-      return 'File size must be less than 5MB';
-    }
-
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
-    }
-
-    return '';
+  const getRoleNameById = (roleId) => {
+    const role = rolesList.find(r => String(r.id) === String(roleId));
+    return role?.name || role?.roleName || '';
   };
 
-  // Password validation
-  const validateCurrentPassword = (password) => {
-    if (!password) return 'Current password is required';
-    return '';
+  const getRoleBadgeColor = (roleId) => {
+    const roleName = getRoleNameById(roleId)?.toLowerCase();
+    if (roleName === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleName === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleName === 'staff') return 'bg-green-100 text-green-800';
+    return 'bg-gray-100 text-gray-700';
   };
 
-  const validateNewPassword = (password) => {
-    if (!password) return 'New password is required';
-    if (password.length < 8) return 'Password must be at least 8 characters';
-    return '';
-  };
-
-  const validateConfirmPassword = (confirmPassword, newPassword) => {
-    if (!confirmPassword) return 'Please confirm your password';
-    if (confirmPassword !== newPassword) return 'Passwords do not match';
-    return '';
-  };
-
-  const validatePasswordField = (name, value) => {
-    switch (name) {
-      case 'currentPassword': return validateCurrentPassword(value);
-      case 'newPassword': return validateNewPassword(value);
-      case 'confirmPassword': return validateConfirmPassword(value, passwordData.newPassword);
-      default: return '';
-    }
-  };
-
-  const handlePasswordBlur = (e) => {
-    const { name, value } = e.target;
-    setPasswordTouched(prev => ({ ...prev, [name]: true }));
-    const error = validatePasswordField(name, value);
-    setPasswordErrors(prev => ({ ...prev, [name]: error }));
-  };
-
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target;
-    setPasswordData(prev => ({ ...prev, [name]: value }));
-    if (passwordErrors[name]) setPasswordErrors(prev => ({ ...prev, [name]: '' }));
-    
-    // If new password changes, re-validate confirm password
-    if (name === 'newPassword' && passwordData.confirmPassword) {
-      const confirmError = validateConfirmPassword(passwordData.confirmPassword, value);
-      setPasswordErrors(prev => ({ ...prev, confirmPassword: confirmError }));
-    }
-  };
-
-  const validatePasswordForm = () => {
-    const newErrors = {};
-    const fields = ['currentPassword', 'newPassword', 'confirmPassword'];
-    fields.forEach(field => {
-      const error = validatePasswordField(field, passwordData[field]);
-      if (error) newErrors[field] = error;
-    });
-    setPasswordErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleChangePassword = async () => {
-    if (!validatePasswordForm()) {
-      showWarningToast('Please fix the password validation errors', 3000);
-      return;
-    }
-
-    setIsChangingPassword(true);
-
-    try {
-      await changeStaffPassword({
-        staffId: Number(formData.id),
-        currentPassword: passwordData.currentPassword,
-        newPassword: passwordData.newPassword,
-        confirmPassword: passwordData.confirmPassword,
-      }).unwrap();
-
-      showSuccessToast("Password changed successfully!", 3000);
-
-      setPasswordData({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-
-      setPasswordErrors({});
-      setPasswordTouched({});
-
-    } catch {
-      // Error handled by API interceptor
-    } finally {
-      setIsChangingPassword(false);
-    }
-  };
-
-  // Populate form data from API response
+  // Reset on ID change
   useEffect(() => {
-    if (staffData?.data) {
-      const staff = staffData.data;
-      populateFormData(staff);
-    } else if (location.state?.staff) {
-      populateFormData(location.state.staff);
-    }
-  }, [staffData, location]);
+    setFormInitialized(false);
+    pendingPlaceRef.current = { place: '', splitStreet: false };
+    setFormData(EMPTY_FORM);
+    setPreviewImage(null);
+    setImageLoaded(false);
+    setImageRefreshKey(Date.now());
+    setErrors({});
+    if (staffId) refetch();
+    return () => setFormInitialized(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffId]);
 
-  const populateFormData = (staff) => {
-    // Prioritize imageUrl, then imageKey, then profileImage
-    const imageKey = staff.imageUrl || staff.imageKey || staff.profileImage || null;
-    
-    const address = staff.address || {};
-    const place = address.place || '';
-    const addressParts = place?.split(' ') || [];
-    
-    setFormData({
-      id: staff.id || staff._id || '',
-      originalId: staff.id || staff._id || '',
-      staffId: formatStaffId(staff.id || staff._id || ''),
-      name: staff.name || '',
-      gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : 'Male',
-      dob: staff.dob ? staff.dob.split('T')[0] : '',
-      mobile: staff.phone || '',
-      email: staff.email || '',
-      designation: staff.designation || '',
-      roleId: staff.roleId || '',
-      appointmentDate: staff.joiningDate ? staff.joiningDate.split('T')[0] : '',
-      staffType: staff.staffType || 'Permanent',
-      jobType: staff.jobType || 'Full Time',
-      knowLanguages: staff.knowLanguages || [],
-      qualification: staff.qualification || '',
-      addressLine1: addressParts[0] || '',
-      addressLine2: addressParts.slice(1).join(' ') || '',
-      city: address.district || '',
-      state: address.state || '',
-      country: address.country || '',
-      place: address.place || '',
-      pincode: address.pincode || '',
-      isActive: staff.isActive ?? true,
-      profileImage: imageKey,
-      imageUrl: imageKey,
-      imageKey: imageKey,
-    });
-    
-    // Set preview image using getFullImageUrl with cache-busting
-    if (imageKey) {
-      const fullUrl = getFullImageUrl(imageKey);
-      setPreviewImage(fullUrl);
-    } else {
-      setPreviewImage(null);
+  // Load data
+  useEffect(() => {
+    if (staff && staff.id && !formInitialized) {
+      const imageKey = staff?.imageUrl || staff?.profileImage || staff?.image || staff?.imageKey || null;
+      const address = staff?.address || {};
+
+      // Address lines: use stored lines if present; otherwise the whole saved
+      // place goes into line 1 and the local area is split off after the pincode lookup.
+      const storedLine1 = address.addressLine1 || address.line1 || address.street || '';
+      const storedLine2 = address.addressLine2 || address.line2 || '';
+      const hasStoredLines = !!(storedLine1 || storedLine2);
+      const savedPlace = address.place || '';
+
+      pendingPlaceRef.current = {
+        place: savedPlace,
+        splitStreet: !hasStoredLines
+      };
+
+      const newFormData = {
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        imageKey: imageKey,
+        name: staff.name || "",
+        gender: staff.gender ? staff.gender.charAt(0).toUpperCase() + staff.gender.slice(1) : "",
+        dob: staff.dob ? new Date(staff.dob).toISOString().split('T')[0] : "",
+        phone: staff.phone || staff.mobile || "",
+        email: staff.email || "",
+        designation: staff.designation || "",
+        roleId: staff.roleId || "",
+        joiningDate: staff.joiningDate ? new Date(staff.joiningDate).toISOString().split('T')[0] : "",
+        staffType: staff.staffType || "",
+        jobType: staff.jobType || "",
+        knowLanguages: staff.knowLanguages || [],
+        qualification: staff.qualification || "",
+        countryName: 'India',
+        stateName: address.state || '',
+        district: address.district || '',
+        localArea: '',
+        pincode: address.pincode ? String(address.pincode) : '',
+        addressLine1: hasStoredLines ? storedLine1 : savedPlace,
+        addressLine2: storedLine2,
+        password: '',
+        confirmPassword: '',
+        isActive: staff.isActive ?? true,
+        shiftStartTime: staff.shiftStartTime || "",
+        shiftEndTime: staff.shiftEndTime || ""
+      };
+
+      setFormData(newFormData);
+
+      if (imageKey) {
+        getS3ImageUrl(imageKey).then((viewUrl) => {
+          setPreviewImage(viewUrl);
+          setImageLoaded(false);
+          setImageRefreshKey(Date.now());
+        });
+      } else {
+        setPreviewImage(null);
+      }
+
+      setFormInitialized(true);
     }
+  }, [staff, formInitialized]);
+
+  // ✅ Handle pincode change
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+
+    // user is typing a new pincode → forget the saved local area
+    pendingPlaceRef.current = { place: '', splitStreet: false };
+
+    setFormData(prev => ({
+      ...prev,
+      pincode: cleaned,
+      stateName: '',
+      district: '',
+      localArea: ''
+    }));
+
+    if (errors.pincode) setErrors(prev => ({ ...prev, pincode: '' }));
   };
 
-  // Image upload handler with hospital ID
+  // ✅ Handle local area change
+  const handleLocalAreaChange = (name) => {
+    setFormData(prev => ({ ...prev, localArea: name }));
+    setTouched(prev => ({ ...prev, localArea: true }));
+    if (errors.localArea) setErrors(prev => ({ ...prev, localArea: '' }));
+  };
+
+  // Image upload
   const handleImageUpload = async (file) => {
-    if (!file) return false;
-    
+    if (!file) return;
     const imageError = validateImage(file);
     if (imageError) {
       setErrors(prev => ({ ...prev, profileImage: imageError }));
       showWarningToast(imageError, 3000);
-      return false;
+      return;
     }
-    
     setErrors(prev => ({ ...prev, profileImage: '' }));
     setUploadProgress(10);
-    
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
     try {
       setUploadProgress(30);
-      
-      const uploaded = await uploadToS3(
-        file, 
-        formData.imageKey || null,
-        Number(formData.id),
-        "staff"
-      );
-      
-      setUploadProgress(100);
-      
+      const uploaded = await uploadToS3(file, formData.imageKey || null, Number(staffId), "staff");
+
+      setUploadProgress(80);
+
       setFormData(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      
-      // FIX: Force image refresh after upload
+
+      const viewUrl = await getS3ImageUrl(uploaded.key);
+
+      if (!viewUrl) {
+        throw new Error("Image uploaded, but could not retrieve its view URL.");
+      }
+
+      setPreviewImage(viewUrl);
+      setImageLoaded(false);
       setImageRefreshKey(Date.now());
-      
+
+      setUploadProgress(100);
       setTimeout(() => setUploadProgress(0), 1000);
-      showSuccessToast('Image uploaded successfully!', 2000);
-      return true;
-    } catch {
+      showSuccessToast('Image uploaded successfully!', 3000);
+    } catch (error) {
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
       if (formData.profileImage) {
-        setPreviewImage(getFullImageUrl(formData.profileImage));
+        const viewUrl = await getS3ImageUrl(formData.profileImage);
+        setPreviewImage(viewUrl);
       } else {
         setPreviewImage(null);
       }
-      return false;
     }
   };
 
-  const handleFileSelect = e => {
+  const validateImage = (file) => {
+    if (!file) return '';
+    if (file.size > 5 * 1024 * 1024) return 'File size must be less than 5MB';
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
+    return '';
+  };
+
+  const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (file) handleImageUpload(file);
   };
 
   const removeImage = () => {
     setPreviewImage(null);
+    setImageLoaded(false);
     setUploadProgress(0);
-    setFormData(prev => ({
-      ...prev,
-      profileImage: null,
-      imageUrl: null,
-      imageKey: ''
-    }));
-    setErrors(prev => ({
-      ...prev,
-      profileImage: ''
-    }));
-    // FIX: Force image refresh after removal
+    setFormData(prev => ({ ...prev, profileImage: null, imageUrl: null, imageKey: '' }));
+    setErrors(prev => ({ ...prev, profileImage: '' }));
     setImageRefreshKey(Date.now());
     showSuccessToast('Image removed', 2000);
   };
 
-  const validateName = (name) => {
-    if (!name || name.trim() === '') return 'Full name is required';
-    if (name.length < 2) return 'Name must be at least 2 characters';
-    if (name.length > 50) return 'Name must be less than 50 characters';
-    return '';
+  // Languages
+  const handleLanguageSelect = useCallback((languageValue) => {
+    setFormData(prev => {
+      const currentLanguages = [...prev.knowLanguages];
+      if (currentLanguages.includes(languageValue)) {
+        return { ...prev, knowLanguages: currentLanguages.filter(lang => lang !== languageValue) };
+      }
+      return { ...prev, knowLanguages: [...currentLanguages, languageValue] };
+    });
+  }, []);
+
+  const removeLanguage = useCallback((languageValue) => {
+    setFormData(prev => ({
+      ...prev,
+      knowLanguages: prev.knowLanguages.filter(lang => lang !== languageValue)
+    }));
+  }, []);
+
+  const getLanguageLabel = (value) => {
+    const lang = languageOptions.find(l => l.value === value);
+    return lang ? lang.label : value;
   };
 
-  const validateMobile = (mobile) => {
-    if (!mobile || mobile.trim() === '') return 'Mobile number is required';
-    const mobileRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,5}[-\s\.]?[0-9]{4,6}$/;
-    if (!mobileRegex.test(mobile)) return 'Please enter a valid mobile number';
-    return '';
-  };
-
-  const validateEmail = (email) => {
-    if (!email || email.trim() === '') return 'Email is required';
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return 'Please enter a valid email address';
-    return '';
-  };
-
-  const validateDesignation = (designation) => {
-    if (!designation) return 'Designation is required';
-    return '';
-  };
-
-  const validateRole = (roleId) => {
-    if (!roleId) return 'Please select a role';
-    return '';
-  };
-
-  const validateDob = (dob) => {
-    if (dob) {
-      const today = new Date();
-      const birthDate = new Date(dob);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const m = today.getMonth() - birthDate.getMonth();
-      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-      if (age < 18 && age > 0) return 'Staff must be at least 18 years old';
-      if (age > 70) return 'Age cannot exceed 70 years';
+  const handleFieldChange = useCallback((field, value) => {
+    if (value && typeof value === "object" && value.target) {
+      value = value.target.value;
     }
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  // ✅ Job type change (clears shift times when not needed)
+  const handleJobTypeChange = useCallback((value) => {
+    setFormData(prev => {
+      const isShiftType = SHIFT_TYPES_WITH_TIME.includes(value);
+      return {
+        ...prev,
+        jobType: value,
+        shiftStartTime: isShiftType ? prev.shiftStartTime : '',
+        shiftEndTime: isShiftType ? prev.shiftEndTime : ''
+      };
+    });
+    if (!SHIFT_TYPES_WITH_TIME.includes(value)) {
+      setErrors(prev => ({ ...prev, shiftStartTime: '', shiftEndTime: '' }));
+      setTouched(prev => ({ ...prev, shiftStartTime: false, shiftEndTime: false }));
+    }
+  }, []);
+
+  const toggleStaffStatus = useCallback(() => {
+    setFormData(prev => ({ ...prev, isActive: !prev.isActive }));
+    showSuccessToast(`Staff status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
+  }, [formData.isActive]);
+
+  const validatePassword = (password) => {
+    if (!password) return '';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+    if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+    if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return 'Password must contain at least one special character';
+    return '';
+  };
+
+  const validateConfirmPassword = (confirmPassword, password) => {
+    if (password && !confirmPassword) return 'Please confirm your password';
+    if (password && confirmPassword !== password) return 'Passwords do not match';
     return '';
   };
 
   const validateField = (name, value) => {
     switch (name) {
-      case 'name': return validateName(value);
-      case 'mobile': return validateMobile(value);
-      case 'email': return validateEmail(value);
-      case 'designation': return validateDesignation(value);
-      case 'roleId': return validateRole(value);
-      case 'dob': return validateDob(value);
-      default: return '';
+      case 'name':
+        if (!value || value.trim() === '') return 'Full name is required';
+        if (value.length < 2) return 'Name must be at least 2 characters';
+        return '';
+      case 'email': {
+        if (!value || value.trim() === '') return 'Email is required';
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(value)) return 'Please enter a valid email address';
+        return '';
+      }
+      case 'designation':
+        if (!value) return 'Designation is required';
+        return '';
+      case 'roleId':
+        if (!value) return 'Please select a role';
+        return '';
+      case 'password':
+        return validatePassword(value);
+      case 'confirmPassword':
+        return validateConfirmPassword(value, formData.password);
+      default:
+        return '';
     }
   };
 
-  const handleBlur = (e) => {
-    const { name, value } = e.target;
+  const handleShiftTimeBlur = (e) => {
+    const { name } = e.target;
     setTouched(prev => ({ ...prev, [name]: true }));
-    const error = validateField(name, value);
-    setErrors(prev => ({ ...prev, [name]: error }));
+    if (!e.target.value) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: name === 'shiftStartTime' ? 'Shift start time is required' : 'Shift end time is required'
+      }));
+    } else {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
-    if (submitError) setSubmitError('');
-  };
-
-  const handleStatusToggle = () => {
-    setFormData(prev => ({
-      ...prev,
-      isActive: !prev.isActive
-    }));
-    showSuccessToast(`Staff status changed to ${!formData.isActive ? 'Active' : 'Inactive'}`, 2000);
-  };
-
+  // Returns the errors object so callers don't read stale state
   const validateForm = () => {
     const newErrors = {};
-    const requiredFields = ['name', 'mobile', 'email', 'designation', 'roleId'];
+    const requiredFields = ['name', 'email', 'designation', 'roleId'];
     requiredFields.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) newErrors[field] = error;
     });
-    const dobError = validateDob(formData.dob);
-    if (dobError) newErrors.dob = dobError;
+
+    if (formData.password) {
+      const passwordError = validatePassword(formData.password);
+      if (passwordError) newErrors.password = passwordError;
+      const confirmError = validateConfirmPassword(formData.confirmPassword, formData.password);
+      if (confirmError) newErrors.confirmPassword = confirmError;
+    }
+
+    if (requiresShiftTime) {
+      if (!formData.shiftStartTime) newErrors.shiftStartTime = 'Shift start time is required';
+      if (!formData.shiftEndTime) newErrors.shiftEndTime = 'Shift end time is required';
+    }
+
+    // ✅ Address is optional, but if a pincode is given it must be complete
+    if (formData.pincode) {
+      if (!/^\d{6}$/.test(formData.pincode)) {
+        newErrors.pincode = 'Please enter a valid 6-digit pincode';
+      } else if (!formData.stateName || !formData.district) {
+        newErrors.pincode = 'Invalid pincode or no location found';
+      } else if (!formData.localArea) {
+        newErrors.localArea = 'Local area is required';
+      }
+    }
+
     setErrors(newErrors);
-    Object.keys(formData).forEach(key => setTouched(prev => ({ ...prev, [key]: true })));
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
-  // ✅ FIXED: Navigation to Hospital Staff List (logs removed)
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+
+    if (formData.password && formData.password !== formData.confirmPassword) {
+      showErrorToast('❌ Passwords do not match!');
+      return;
+    }
+
+    setTouched(prev => ({
+      ...prev,
+      pincode: true,
+      localArea: true,
+      ...(requiresShiftTime ? { shiftStartTime: true, shiftEndTime: true } : {})
+    }));
+
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      showWarningToast('Please fix the validation errors before submitting', 3000);
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const roleId = Number(formData.roleId);
+      const selectedRoleName = getRoleNameById(roleId);
+
+      const address = {
+        country: formData.pincode || formData.stateName ? 'India' : '',
+        state: formData.stateName || '',
+        district: formData.district || '',
+        place: buildPlace(formData.addressLine1, formData.addressLine2, formData.localArea),
+        pincode: formData.pincode ? Number(formData.pincode) : null,
+        addressLine1: formData.addressLine1 || '',
+        addressLine2: formData.addressLine2 || ''
+      };
+      Object.keys(address).forEach(key => {
+        if (address[key] === '' || address[key] === null || address[key] === undefined) {
+          delete address[key];
+        }
+      });
+
+      const updatedStaffData = {
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        designation: formData.designation,
+        joiningDate: formData.joiningDate,
+        jobType: formData.jobType,
+        staffType: formData.staffType,
+        dob: formData.dob,
+        gender: formData.gender?.toLowerCase(),
+        knowLanguages: formData.knowLanguages,
+        qualification: formData.qualification,
+        roleId: roleId,
+        hospitalName: hospitalName,
+        hospitalId: Number(hospitalId),
+        authId: authId,
+        imageUrl: formData.imageUrl,
+        profileImage: formData.profileImage,
+        imageKey: formData.imageKey,
+        isActive: formData.isActive,
+        shiftStartTime: requiresShiftTime ? formData.shiftStartTime : null,
+        shiftEndTime: requiresShiftTime ? formData.shiftEndTime : null,
+        address: address
+      };
+
+      Object.keys(updatedStaffData).forEach(key => {
+        if (updatedStaffData[key] === undefined || updatedStaffData[key] === '') {
+          delete updatedStaffData[key];
+        }
+      });
+
+      await updateStaff({
+        id: String(staffId),
+        data: updatedStaffData,
+        hospitalId: Number(hospitalId),
+        authId: authId
+      }).unwrap();
+
+      if (formData.password) {
+        await changeStaffPassword({
+          staffId: String(staffId),
+          newPassword: formData.password,
+          confirmPassword: formData.confirmPassword,
+        }).unwrap();
+      }
+
+      if (roleId) {
+        const payload = {
+          hospitalId: Number(hospitalId),
+          roleId: roleId,
+          userType: "staff",
+          staffIds: [{ id: Number(staffId), roleId: roleId }]
+        };
+        await assignPermissions(payload).unwrap();
+      }
+
+      setImageRefreshKey(Date.now());
+      await refetch();
+
+      setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
+
+      showUpdateToast(
+        `${formData.name}'s information has been updated successfully!`,
+        4000,
+        {
+          'Name': formData.name,
+          'ID': staffId,
+          'Designation': formData.designation,
+          'Role': selectedRoleName,
+          'Status': formData.isActive ? 'Active' : 'Inactive',
+          ...(formData.password ? { 'Password': 'Updated ✓' } : {}),
+          ...(requiresShiftTime ? {
+            'Shift Start': formData.shiftStartTime,
+            'Shift End': formData.shiftEndTime
+          } : {})
+        }
+      );
+
+      // ✅ Navigate back to super-admin hospital staff list
+      setTimeout(() => {
+        if (hospitalId) {
+          navigate(`/super-admin/hospitals/${hospitalId}/staff`);
+        } else {
+          navigate('/staffs');
+        }
+      }, 1500);
+
+    } catch (error) {
+      console.error('Update Staff Error:', error);
+      const status = error?.status || error?.originalStatus;
+      if (status === 401) {
+        showErrorToast('Session expired. Please login again.', 3000);
+        setTimeout(() => { window.location.href = '/sign-in'; }, 2000);
+        return;
+      }
+      const message =
+        error?.data?.error?.details?.[0]?.message ||
+        error?.data?.details?.[0]?.message ||
+        error?.data?.errors?.[0]?.message ||
+        error?.data?.error?.message ||
+        error?.data?.message ||
+        error?.error ||
+        error?.message ||
+        'Failed to update staff member';
+      showErrorToast(message, 4000);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ✅ Navigate back to super-admin hospital staff list
   const handleGoBack = () => {
     if (hospitalId) {
       navigate(`/super-admin/hospitals/${hospitalId}/staff`);
@@ -597,258 +995,117 @@ const EditStaff = () => {
     }
   };
 
-  const handleDelete = async () => {
-    setIsDeleting(true);
-    try {
-      await deleteStaff(formData.id).unwrap();
-      showDeleteToast(
-        `${formData.name} has been deleted successfully!`,
-        4000,
-        {
-          'Name': formData.name,
-          'ID': formData.id,
-          'Designation': formData.designation
-        }
-      );
-      setIsDeleting(false);
-      setSubmitSuccess(true);
-      setTimeout(() => handleGoBack(), 1500);
-    } catch {
-      showErrorToast('Failed to delete staff member', 3000);
-      setIsDeleting(false);
-      setDeleteConfirm(false);
-    }
-  };
+  const handleRetry = () => refetch();
 
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      if (errors.name || errors.mobile || errors.email || errors.designation || errors.dob) setActiveTab('basic');
-      showWarningToast('Please fix the validation errors before submitting', 3000);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const combinedPlace = `${formData.addressLine1} ${formData.addressLine2}`.trim();
-      const roleId = Number(formData.roleId);
-      const selectedRoleName = getRoleNameById(roleId);
-      
-      const updateData = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.mobile,
-        designation: formData.designation,
-        joiningDate: formData.appointmentDate || undefined,
-        jobType: formData.jobType || undefined,
-        staffType: formData.staffType || undefined,
-        dob: formData.dob || undefined,
-        gender: formData.gender.toLowerCase(),
-        knowLanguages: formData.knowLanguages,
-        qualification: formData.qualification || undefined,
-        roleId: roleId,
-        hospitalName: hospitalName,
-        address: {
-          country: formData.country || undefined,
-          state: formData.state || undefined,
-          district: formData.city || undefined,
-          place: combinedPlace || formData.place || undefined,
-          pincode: formData.pincode ? Number(formData.pincode) : undefined
-        },
-        isActive: formData.isActive,
-        imageUrl: formData.imageUrl,
-        profileImage: formData.profileImage,
-        imageKey: formData.imageKey,
-      };
-
-      removeUndefined(updateData);
-      if (updateData.address) {
-        removeUndefined(updateData.address);
-      }
-
-      await updateStaff({
-        id: formData.id,
-        data: updateData
-      }).unwrap();
-
-      // Update role permission if roleId changed
-      if (roleId) {
-        const payload = {
-          hospitalId: Number(hospitalId),
-          roleId: roleId,
-          userType: "staff",
-          staffIds: [
-            {
-              id: Number(formData.id),
-              roleId: roleId
-            }
-          ]
-        };
-        
-        await assignPermissions(payload).unwrap();
-      }
-
-      await refetch();
-      
-      // FIX: Force image refresh after update
-      setImageRefreshKey(Date.now());
-      
-      showUpdateToast(
-        `${formData.name}'s information has been updated successfully!`,
-        4000,
-        {
-          'Name': formData.name,
-          'ID': formData.id,
-          'Designation': formData.designation,
-          'Role': selectedRoleName,
-          'Hospital': hospitalName,
-          'Status': formData.isActive ? 'Active' : 'Inactive'
-        }
-      );
-      
-      setIsSubmitting(false);
-      setSubmitSuccess(true);
-      setTimeout(() => handleGoBack(), 1500);
-    } catch {
-      showErrorToast('Failed to update staff member', 3000);
-      setIsSubmitting(false);
-      setSubmitError('Failed to update staff');
-    }
-  };
-
-  const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
-  const cities = ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'Austin'];
-  const states = ['California', 'Texas', 'New York', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan'];
-  const countries = ['United States', 'Canada', 'United Kingdom', 'Australia', 'India', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
-
-  const tabs = [
-    { id: 'basic', label: 'Basic Info' },
-    { id: 'password', label: 'Change Password' }
-  ];
-
-  const isFormSubmitting = isSubmitting || isUpdateLoading || isAssigning;
-  const isUploading = uploadProgress > 0 && uploadProgress < 100;
-  const isLoadingData = loading || rolesLoading;
-
-  // Skeleton Loading State
-  if (isLoadingData) {
+  if (!hospitalId) {
     return (
-      <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9' }}>
-        <div className="p-6">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
-            <div className="border-b border-gray-200 px-6 pt-4">
-              <div className="flex gap-6">
-                <div className="h-10 w-24 bg-gray-200 rounded animate-pulse"></div>
-              </div>
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
+          <p className="text-gray-600 mb-4">Please log in again to access this page.</p>
+          <Button variant="primary" onClick={() => navigate('/login')}>Go to Login</Button>
+        </div>
+      </div>
+    );
+  }
 
-            <div className="p-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 mb-6 pb-6 border-b border-gray-200">
-                <div className="w-24 h-24 bg-gray-200 rounded-full animate-pulse"></div>
-                <div className="flex-1">
-                  <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-2"></div>
-                  <div className="h-10 w-40 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-3 w-48 bg-gray-200 rounded animate-pulse mt-2"></div>
-                </div>
-              </div>
+  if (isLoading || rolesLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading staff data...</p>
+        </div>
+      </div>
+    );
+  }
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-2">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
-                  <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
-                </div>
-                {[...Array(15)].map((_, i) => (
-                  <div key={i} className="space-y-2">
-                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-10 w-full bg-gray-200 rounded animate-pulse"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-              <div className="h-10 w-24 bg-gray-200 rounded animate-pulse"></div>
-              <div className="h-10 w-32 bg-gray-200 rounded animate-pulse"></div>
-            </div>
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="bg-red-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
+            <AlertCircle className="h-10 w-10 text-red-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mt-4">Error Loading Staff</h2>
+          <p className="text-gray-600 mt-2">There was an error loading the staff data.</p>
+          <div className="flex gap-3 mt-6 justify-center">
+            <Button variant="outline" onClick={handleGoBack}>Back to Staff List</Button>
+            <Button variant="primary" onClick={handleRetry}>Retry</Button>
           </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
+  if (!staff && !isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="bg-yellow-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
+            <AlertCircle className="h-10 w-10 text-yellow-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mt-4">Staff Not Found</h2>
+          <p className="text-gray-600 mt-2">No staff member found with ID: {staffId}</p>
+          <Button variant="primary" onClick={handleGoBack} className="mt-6">Back to Staff List</Button>
+        </div>
+      </div>
+    );
+  }
 
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Confirm Delete</h3>
-            <p className="text-gray-600 mb-4">Are you sure you want to delete <span className="font-semibold">{formData.name}</span>? This action cannot be undone.</p>
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setDeleteConfirm(false)} disabled={isDeleting || isDeleteLoading}>Cancel</Button>
-              <Button variant="danger" onClick={handleDelete} disabled={isDeleting || isDeleteLoading} loading={isDeleting || isDeleteLoading}>
-                {isDeleting || isDeleteLoading ? 'Deleting...' : 'Delete'}
-              </Button>
+  const isUploading = uploadProgress > 0 && uploadProgress < 100;
+  const isFormSubmitting = isSubmitting || isUpdateLoading || isAssigning || isPasswordChanging;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-5xl mx-auto">
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Edit Staff</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                Editing: {formData.name} ({formatStaffId(staff?.id || staffId)})
+              </p>
+              {hospitalId && (
+                <p className="text-xs text-blue-600 mt-0.5">Hospital ID: {hospitalId}</p>
+              )}
             </div>
           </div>
         </div>
-      )}
 
-      <div className="p-6">
-        <Card>
-          <div className="border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center gap-3">
-              <button onClick={handleGoBack} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-                <ArrowLeft size={20} className="text-gray-600" />
-              </button>
-              <div>
-                <h2 className="text-lg font-semibold text-gray-800">Edit Staff</h2>
-                <p className="text-sm text-gray-500 mt-0.5">Update staff member information</p>
-                {hospitalId && (
-                  <p className="text-xs text-gray-400 mt-0.5">Hospital ID: {hospitalId}</p>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
-
-          {activeTab === 'basic' && (
-            <div className="p-6">
+        <form onSubmit={handleSubmit}>
+          {/* Plain container (overflow-visible) so dropdowns are not clipped */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-visible">
+            <div className="p-6 space-y-6">
+              {/* Profile Image */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <div className="relative">
                     <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                       {previewImage ? (
-                        <img 
+                        <img
                           key={imageRefreshKey}
-                          src={previewImage} 
-                          alt="Profile" 
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            const parent = e.target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-full h-full bg-gray-100 flex items-center justify-center">
-                                <span class="text-gray-400 text-2xl font-medium">${formData.name ? formData.name.charAt(0).toUpperCase() : '?'}</span>
-                              </div>`;
-                            }
-                          }}
+                          src={previewImage}
+                          alt="Profile"
+                          className="w-full h-full object-cover rounded-full"
+                          onLoad={() => setImageLoaded(true)}
+                          onError={() => setImageLoaded(false)}
                         />
                       ) : (
-                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                        <div className="w-full h-full bg-gray-100 flex items-center justify-center rounded-full">
                           <span className="text-gray-400 text-2xl font-medium">
-                            {formData.name ? formData.name.charAt(0).toUpperCase() : '?'}
+                            {formData.name ? formData.name.charAt(0).toUpperCase() : 'S'}
                           </span>
                         </div>
                       )}
                     </div>
-                    {previewImage && (
-                      <button
-                        type="button"
-                        onClick={removeImage}
-                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
-                      >
+                    {(previewImage || formData.profileImage) && (
+                      <button type="button" onClick={removeImage}
+                        className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm">
                         <X className="h-3 w-3" />
                       </button>
                     )}
@@ -857,225 +1114,456 @@ const EditStaff = () => {
                 <div className="flex-1 w-full">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
                   <div>
-                    <input
-                      id="profileImageInput"
-                      type="file"
-                      accept="image/jpeg,image/png,image/gif,image/webp"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => document.getElementById('profileImageInput').click()}
-                      className="inline-flex items-center gap-2"
-                      disabled={isFormSubmitting}
-                    >
-                      <Upload className="h-4 w-4" />
-                      Upload New Image
+                    <input id="profileImageInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleFileSelect} className="hidden" />
+                    <Button type="button" variant="outline" onClick={() => document.getElementById('profileImageInput').click()} className="inline-flex items-center gap-2" disabled={isFormSubmitting}>
+                      <Upload className="h-4 w-4" /> Upload New Image
                     </Button>
                     <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                   </div>
-                  
                   {isUploading && (
                     <div className="mt-2">
                       <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
+                        <div className="h-full bg-[#1C62A0] transition-all duration-300 rounded-full" style={{ width: `${uploadProgress}%` }} />
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Uploading to cloud... {uploadProgress}%</p>
                     </div>
                   )}
-                  
                   {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-6">
-                {/* Staff ID field */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID</label>
-                  <input 
-                    type="text" 
-                    value={formData.staffId || formData.id} 
-                    disabled 
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600" 
-                  />
+              {/* Staff ID */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">Staff ID:</span>
+                  <span className="text-sm font-medium text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                    {formatStaffId(staff?.id || staffId)}
+                  </span>
                 </div>
-                
-                <Input 
-                  label="Full Name *" 
-                  name="name" 
-                  value={formData.name} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.name} 
-                  touched={touched.name} 
-                  required 
-                  placeholder="Enter full name" 
+              </div>
+
+              {/* Personal */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input
+                  label="Full Name *" name="name" icon={User}
+                  placeholder="Enter full name"
+                  value={formData.name}
+                  onChange={(e) => handleFieldChange('name', e.target.value)}
+                  error={errors.name} touched={touched.name}
+                  onBlur={(e) => {
+                    setTouched(prev => ({ ...prev, name: true }));
+                    const error = validateField('name', e.target.value);
+                    setErrors(prev => ({ ...prev, name: error }));
+                  }}
+                  required
                 />
-                
-                {/* Assign Role - Dynamic dropdown */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assign Role <span className="text-red-500">*</span>
+
+                <CustomSelect
+                  label="Gender"
+                  icon={Users}
+                  value={formData.gender}
+                  options={GENDER_SELECT_OPTIONS}
+                  placeholder="Select gender"
+                  onChange={(value) => handleFieldChange('gender', value)}
+                  className={SELECT_FORM_CLASS}
+                />
+              </div>
+
+              {/* Date of Birth & Joining Date — using custom DatePicker */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date of Birth
                   </label>
                   <div className="relative">
-                    <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <select
-                      name="roleId"
-                      value={formData.roleId}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
-                    >
-                      <option value="">Select a role</option>
-                      {rolesList.map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.name || role.roleName}
-                        </option>
-                      ))}
-                    </select>
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.dob}
+                      onChange={(iso) => handleFieldChange('dob', iso)}
+                      mode="dob"
+                      placeholder="DD/MM/YYYY"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                    />
                   </div>
-                  {errors.roleId && <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>}
-                  {formData.roleId && (
-                    <div className="mt-2">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
-                        {getRoleNameById(formData.roleId)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                
-                <Select label="Gender" name="gender" options={['Male', 'Female', 'Other']} value={formData.gender} onChange={handleChange} onBlur={handleBlur} error={errors.gender} touched={touched.gender} />
-                <Input label="Date of Birth" name="dob" type="date" value={formData.dob} onChange={handleChange} onBlur={handleBlur} error={errors.dob} touched={touched.dob} />
-                <Input label="Mobile Number *" name="mobile" type="tel" value={formData.mobile} onChange={handleChange} onBlur={handleBlur} error={errors.mobile} touched={touched.mobile} required placeholder="+1 00000 00000" />
-                <Input label="Email *" name="email" type="email" value={formData.email} onChange={handleChange} onBlur={handleBlur} error={errors.email} touched={touched.email} required placeholder="staff@example.com" />
-                <Select label="Designation *" name="designation" options={designations} value={formData.designation} onChange={handleChange} onBlur={handleBlur} error={errors.designation} touched={touched.designation} required />
-                <Input label="Joining Date" name="appointmentDate" type="date" value={formData.appointmentDate} onChange={handleChange} onBlur={handleBlur} error={errors.appointmentDate} touched={touched.appointmentDate} />
-                <Input label="Qualification" name="qualification" value={formData.qualification} onChange={handleChange} placeholder="MBA, B.Tech, etc." />
-                <Select label="Staff Type" name="staffType" options={['Permanent', 'Contract', 'Temporary', 'Intern']} value={formData.staffType} onChange={handleChange} onBlur={handleBlur} error={errors.staffType} touched={touched.staffType} />
-                <Select label="Job Type" name="jobType" options={['Full Time', 'Part Time', 'Remote', 'Hybrid']} value={formData.jobType} onChange={handleChange} onBlur={handleBlur} error={errors.jobType} touched={touched.jobType} />
-                <div className="md:col-span-2"><Input label="Address Line 1" name="addressLine1" value={formData.addressLine1} onChange={handleChange} placeholder="Street address" /></div>
-                <div className="md:col-span-2"><Input label="Address Line 2" name="addressLine2" value={formData.addressLine2} onChange={handleChange} placeholder="Apt, suite, unit (optional)" /></div>
-                <Select label="City/District" name="city" options={cities} value={formData.city} onChange={handleChange} onBlur={handleBlur} error={errors.city} touched={touched.city} />
-                <Select label="State" name="state" options={states} value={formData.state} onChange={handleChange} onBlur={handleBlur} error={errors.state} touched={touched.state} />
-                <Select label="Country" name="country" options={countries} value={formData.country} onChange={handleChange} onBlur={handleBlur} error={errors.country} touched={touched.country} />
-                <Input label="Pincode" name="pincode" value={formData.pincode} onChange={handleChange} onBlur={handleBlur} error={errors.pincode} touched={touched.pincode} placeholder="Postal code" maxLength={6} />
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
-                <div className="flex items-center">
-                  <Switch checked={formData.isActive} onChange={handleStatusToggle} />
-                  <span className="ml-3 text-sm text-gray-600">{formData.isActive ? 'Active' : 'Inactive'}</span>
-                </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Toggle to {formData.isActive ? 'deactivate' : 'activate'} this staff member
-                </p>
-                <div className="mt-3">
-                  {formData.isActive ? (
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-md text-xs">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      Staff is currently ACTIVE
-                    </div>
-                  ) : (
-                    <div className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-md text-xs">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      Staff is currently INACTIVE
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'password' && (
-            <div className="p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                  <Lock className="w-5 h-5 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-800">Change Password</h3>
-                  <p className="text-sm text-gray-500">Update your account password</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Joining Date
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.joiningDate}
+                      onChange={(iso) => handleFieldChange('joiningDate', iso)}
+                      mode="any"
+                      placeholder="DD/MM/YYYY"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="max-w-lg space-y-4">
-                <PasswordInput
-                  label="Current Password *"
-                  name="currentPassword"
-                  value={passwordData.currentPassword}
-                  onChange={handlePasswordChange}
-                  onBlur={handlePasswordBlur}
-                  error={passwordErrors.currentPassword}
-                  touched={passwordTouched.currentPassword}
-                  showPassword={showCurrentPassword}
-                  setShowPassword={setShowCurrentPassword}
-                  placeholder="Enter current password"
-                  icon={Lock}
-                  required
-                />
-
-                <PasswordInput
-                  label="New Password *"
-                  name="newPassword"
-                  value={passwordData.newPassword}
-                  onChange={handlePasswordChange}
-                  onBlur={handlePasswordBlur}
-                  error={passwordErrors.newPassword}
-                  touched={passwordTouched.newPassword}
-                  showPassword={showNewPassword}
-                  setShowPassword={setShowNewPassword}
-                  placeholder="Enter new password (min 8 characters)"
-                  icon={Lock}
-                  required
-                />
-
-                <PasswordInput
-                  label="Confirm New Password *"
-                  name="confirmPassword"
-                  value={passwordData.confirmPassword}
-                  onChange={handlePasswordChange}
-                  onBlur={handlePasswordBlur}
-                  error={passwordErrors.confirmPassword}
-                  touched={passwordTouched.confirmPassword}
-                  showPassword={showConfirmPassword}
-                  setShowPassword={setShowConfirmPassword}
-                  placeholder="Confirm new password"
-                  icon={Lock}
-                  required
-                />
-
-                <div className="pt-4 border-t border-gray-200">
-                  <Button
-                    variant="primary"
-                    onClick={handleChangePassword}
-                    disabled={isChangingPassword || isPasswordLoading}
-                    loading={isChangingPassword || isPasswordLoading}
-                    className="w-full sm:w-auto"
-                  >
-                    {isChangingPassword || isPasswordLoading ? 'Changing...' : 'Change Password'}
-                  </Button>
+              <CustomSelect
+                label="Assign Role"
+                icon={Shield}
+                value={formData.roleId != null ? String(formData.roleId) : ''}
+                options={roleOptions}
+                placeholder="Select a role"
+                onChange={(value) => handleFieldChange('roleId', value)}
+                onBlur={() => {
+                  setTouched(prev => ({ ...prev, roleId: true }));
+                  const error = validateField('roleId', formData.roleId);
+                  setErrors(prev => ({ ...prev, roleId: error }));
+                }}
+                error={errors.roleId}
+                touched={touched.roleId}
+                required
+                className={SELECT_FORM_CLASS}
+              />
+              {formData.roleId && (
+                <div className="-mt-3">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                    {getRoleNameById(formData.roleId)}
+                  </span>
                 </div>
+              )}
+
+              {/* Professional */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <CustomSelect
+                  label="Designation"
+                  icon={Briefcase}
+                  value={formData.designation}
+                  options={designations.map(d => ({ value: d, label: d }))}
+                  placeholder="Select designation"
+                  onChange={(value) => handleFieldChange('designation', value)}
+                  onBlur={() => {
+                    setTouched(prev => ({ ...prev, designation: true }));
+                    const error = validateField('designation', formData.designation);
+                    setErrors(prev => ({ ...prev, designation: error }));
+                  }}
+                  error={errors.designation}
+                  touched={touched.designation}
+                  required
+                  className={SELECT_FORM_CLASS}
+                />
+                <Input
+                  label="Qualification" name="qualification" icon={GraduationCap}
+                  placeholder="e.g., MBA, B.Tech"
+                  value={formData.qualification}
+                  onChange={(e) => handleFieldChange('qualification', e.target.value)}
+                />
+              </div>
+
+              {/* Staff Type & Job Type */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <CustomSelect
+                  label="Staff Type"
+                  icon={Users}
+                  value={formData.staffType}
+                  options={staffTypes.map(t => ({ value: t, label: t }))}
+                  placeholder="Select staff type"
+                  onChange={(value) => handleFieldChange('staffType', value)}
+                  className={SELECT_FORM_CLASS}
+                />
+
+                <CustomSelect
+                  label="Job Type"
+                  icon={Briefcase}
+                  value={formData.jobType}
+                  options={jobTypes.map(t => ({ value: t, label: t }))}
+                  placeholder="Select job type"
+                  onChange={(value) => handleJobTypeChange(value)}
+                  className={SELECT_FORM_CLASS}
+                />
+              </div>
+
+              {/* ✅ Shift Time Fields */}
+              {requiresShiftTime && (
+                <ShiftTimeInput
+                  shiftStartTime={formData.shiftStartTime}
+                  shiftEndTime={formData.shiftEndTime}
+                  onChange={(e) => handleFieldChange(e.target.name, e.target.value)}
+                  onBlur={handleShiftTimeBlur}
+                  errors={errors}
+                  touched={touched}
+                />
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <Input
+                  label="Phone Number *" name="phone" icon={Phone}
+                  placeholder="10 digit phone number"
+                  value={formData.phone}
+                  onChange={(e) => handleFieldChange('phone', e.target.value)}
+                  required
+                />
+                <Input
+                  label="Email Address *" name="email" type="email" icon={Mail}
+                  placeholder="staff@example.com"
+                  value={formData.email}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
+                  onBlur={(e) => {
+                    setTouched(prev => ({ ...prev, email: true }));
+                    const error = validateField('email', e.target.value);
+                    setErrors(prev => ({ ...prev, email: error }));
+                  }}
+                  error={errors.email} touched={touched.email}
+                  required
+                />
+              </div>
+
+              {/* Languages */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Known Languages</label>
+                {formData.knowLanguages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.knowLanguages.map(lang => (
+                      <span key={lang} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
+                        {getLanguageLabel(lang)}
+                        <button type="button" onClick={() => removeLanguage(lang)} className="hover:text-blue-600">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+                    className={`w-full px-3 py-2 text-left border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between bg-white ${
+                      formData.knowLanguages.length === 0 ? 'text-gray-400' : 'text-gray-900'
+                    }`}
+                  >
+                    <span>
+                      {formData.knowLanguages.length === 0 ? 'Select languages' : `${formData.knowLanguages.length} language(s) selected`}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 transition-transform ${showLanguageDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                  {showLanguageDropdown && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setShowLanguageDropdown(false)} />
+                      <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                        {languageOptions.map(lang => (
+                          <label key={lang.value} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.knowLanguages.includes(lang.value)}
+                              onChange={() => handleLanguageSelect(lang.value)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">{lang.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Account Details */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="relative">
+                    <PasswordInput
+                      label="New Password" name="password"
+                      value={formData.password}
+                      onChange={(e) => handleFieldChange('password', e.target.value)}
+                      onBlur={(e) => {
+                        setTouched(prev => ({ ...prev, password: true }));
+                        const error = validateField('password', e.target.value);
+                        setErrors(prev => ({ ...prev, password: error }));
+                      }}
+                      error={errors.password} touched={touched.password}
+                      showPassword={showPassword} setShowPassword={setShowPassword}
+                      placeholder="Leave blank to keep current"
+                      icon={Lock}
+                    />
+                  </div>
+                  <div className="relative">
+                    <PasswordInput
+                      label="Confirm New Password" name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
+                      onBlur={(e) => {
+                        setTouched(prev => ({ ...prev, confirmPassword: true }));
+                        const error = validateField('confirmPassword', e.target.value);
+                        setErrors(prev => ({ ...prev, confirmPassword: error }));
+                      }}
+                      error={errors.confirmPassword} touched={touched.confirmPassword}
+                      showPassword={showConfirmPassword} setShowPassword={setShowConfirmPassword}
+                      placeholder="Confirm new password"
+                      icon={Lock}
+                    />
+                  </div>
+                </div>
+                {formData.password && !errors.password && (
+                  <p className="text-xs text-green-600 mt-2">✓ New password will be updated</p>
+                )}
+                <p className="text-xs text-gray-400 mt-2">
+                  Leave password fields blank to keep the current password
+                </p>
+              </div>
+
+              {/* Address */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
+                <div className="space-y-5">
+                  {/* Country (fixed India) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <div className="w-full px-4 py-2 rounded-lg border border-gray-200 bg-gray-100 flex justify-between">
+                      <span>🇮🇳 India</span>
+                      <span className="text-green-600 font-medium text-sm">✓ Default</span>
+                    </div>
+                  </div>
+
+                  {/* Pincode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="pincode"
+                        value={formData.pincode}
+                        onChange={(e) => handlePincodeChange(e.target.value)}
+                        onBlur={() => setTouched(prev => ({ ...prev, pincode: true }))}
+                        placeholder="Enter 6 digit pincode (Optional)"
+                        maxLength={6}
+                        className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+                          errors.pincode && touched.pincode ? 'border-red-500' : 'border-gray-300'
+                        } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent`}
+                      />
+                      {isPincodeLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                        </div>
+                      )}
+                      {!isPincodeLoading && postOffices.length > 0 && (
+                        <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Enter pincode to automatically find the location.
+                    </p>
+                    {isPincodeLoading && (
+                      <p className="text-xs text-blue-600 mt-2">Finding location...</p>
+                    )}
+                    {isPincodeError && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Unable to fetch pincode details. Please try again.
+                      </p>
+                    )}
+                    {formData.pincode.length === 6 &&
+                      !isPincodeLoading &&
+                      !isPincodeError &&
+                      postOffices.length === 0 && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Invalid pincode or no location found.
+                        </p>
+                      )}
+                    {touched.pincode && errors.pincode && (
+                      <p className="text-sm text-red-600 mt-1">{errors.pincode}</p>
+                    )}
+                  </div>
+
+                  {/* State + District (read-only, auto-filled) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.stateName}
+                          readOnly
+                          placeholder="Automatically detected state"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.district}
+                          readOnly
+                          placeholder="Automatically detected district"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Local Area (post offices) */}
+                  <SearchableCityDropdown
+                    label="Local Area"
+                    options={[
+                      ...new Map(
+                        postOffices.map((office) => [
+                          office.Name,
+                          { name: office.Name }
+                        ])
+                      ).values()
+                    ]}
+                    value={formData.localArea}
+                    onChange={handleLocalAreaChange}
+                    placeholder={
+                      postOffices.length === 0
+                        ? 'Enter pincode first'
+                        : 'Select local area'
+                    }
+                    required={postOffices.length > 0}
+                    disabled={postOffices.length === 0}
+                    error={errors.localArea}
+                    touched={touched.localArea}
+                  />
+
+                  {/* Address lines (editable) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input
+                      label="Address Line 1" name="addressLine1"
+                      placeholder="House no., street"
+                      value={formData.addressLine1}
+                      onChange={(e) => handleFieldChange('addressLine1', e.target.value)}
+                    />
+                    <Input
+                      label="Address Line 2" name="addressLine2"
+                      placeholder="Apt, suite, unit (optional)"
+                      value={formData.addressLine2}
+                      onChange={(e) => handleFieldChange('addressLine2', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <StatusToggle
+                  status={formData.isActive}
+                  onToggle={toggleStaffStatus}
+                  disabled={isFormSubmitting}
+                />
               </div>
             </div>
-          )}
 
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3">
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>Cancel</Button>
-              <Button variant="danger" onClick={() => setDeleteConfirm(true)} disabled={isDeleting || isDeleteLoading || isFormSubmitting}>
-                Delete
+            {/* Actions */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+              <Button type="button" variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>
+                Cancel
               </Button>
-              <Button variant="primary" onClick={handleSubmit} disabled={isFormSubmitting} loading={isFormSubmitting}>
+              <Button type="submit" variant="primary" disabled={isFormSubmitting} loading={isFormSubmitting}>
                 {isFormSubmitting ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </div>
-        </Card>
+        </form>
       </div>
     </div>
   );

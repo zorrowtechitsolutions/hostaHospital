@@ -1,6 +1,6 @@
 // src/components/Doctor/ViewDoctor.jsx
 import { useParams, useNavigate } from "react-router-dom";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button, Badge, Loader } from "../ui";
 import {
   Mail,
@@ -30,7 +30,91 @@ import { useGetDoctorByIdQuery } from "../../../app/service/doctorApi";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 // ✅ Import shared S3 helper (env-driven base URL)
-import { getS3ImageUrl } from "../../../app/service/S3";
+import { getS3ImageUrl as getS3ImageUrlRaw } from "../../../app/service/S3";
+
+// ============ S3 SIGNED URL CACHE (same pattern as Doctors.jsx) ============
+const signedUrlCache = new Map(); // key -> { url, expiresAt }
+const URL_TTL_MS = 55 * 60 * 1000; // 55 min (presign TTL minus buffer)
+
+const getCached = (key) => {
+  const hit = signedUrlCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    signedUrlCache.delete(key);
+    return null;
+  }
+  return hit.url;
+};
+
+const setCached = (key, url) =>
+  signedUrlCache.set(key, { url, expiresAt: Date.now() + URL_TTL_MS });
+
+const isDirectUrl = (key) =>
+  !!key &&
+  (key.startsWith("http://") ||
+    key.startsWith("https://") ||
+    key.startsWith("data:"));
+
+// ✅ DoctorAvatar — resolves the S3 key to a signed view URL asynchronously.
+// IMPORTANT: never append query params (e.g. ?t=timestamp) to a signed URL —
+// it invalidates the signature.
+const DoctorAvatar = ({ imageKey, name, className }) => {
+  const [imageSrc, setImageSrc] = useState(() => {
+    if (!imageKey) return null;
+    if (isDirectUrl(imageKey)) return imageKey;
+    return getCached(imageKey) || null;
+  });
+
+  useEffect(() => {
+    if (!imageKey) {
+      setImageSrc(null);
+      return;
+    }
+
+    // Already a full URL / data URI — no resolution needed.
+    if (isDirectUrl(imageKey)) {
+      setImageSrc(imageKey);
+      return;
+    }
+
+    // Cache hit
+    const cached = getCached(imageKey);
+    if (cached) {
+      setImageSrc(cached);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadImage = async () => {
+      try {
+        const url = await getS3ImageUrlRaw(imageKey);
+        if (cancelled) return;
+        if (url) setCached(imageKey, url);
+        setImageSrc(url);
+      } catch (error) {
+        console.error("Doctor image loading error:", error);
+        if (!cancelled) setImageSrc(null);
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageKey]);
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage src={imageSrc || undefined} alt={name || "Doctor"} />
+      <AvatarFallback>
+        {(name?.[0] || "D").toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+  );
+};
+// ============ END S3 SIGNED URL CACHE ============
 
 // ============ SKELETON LOADING COMPONENTS ============
 
@@ -386,16 +470,12 @@ const ViewDoctor = () => {
 
         <div className={`${CARD_CLASS} p-6 mb-6`}>
           <div className="flex flex-col md:flex-row items-start gap-6">
-            <Avatar className="w-24 h-24">
-              <AvatarImage
-                src={getS3ImageUrl(imageKey)}
-                alt={doctorName}
-                className="object-cover"
-              />
-              <AvatarFallback className="text-2xl font-medium bg-gray-200">
-                {doctor?.firstName?.[0]?.toUpperCase() || doctor?.displayName?.[0]?.toUpperCase() || "D"}
-              </AvatarFallback>
-            </Avatar>
+            {/* ✅ FIX: Use async-resolving DoctorAvatar (same as Doctors.jsx) */}
+            <DoctorAvatar
+              imageKey={imageKey}
+              name={doctorName}
+              className="w-24 h-24"
+            />
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>

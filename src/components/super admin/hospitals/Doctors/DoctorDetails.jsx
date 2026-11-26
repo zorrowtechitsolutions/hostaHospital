@@ -1,33 +1,221 @@
 // src/components/super-admin/DoctorDetails.jsx
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { Button, Badge } from '../../../ui';
 import {
-  ArrowLeft,
-  Stethoscope,
   Mail,
   Phone,
-  MapPin,
-  Calendar,
+  Video,
+  CheckCircle,
+  XCircle,
   Clock,
-  Briefcase,
-  IdCard,
-  User as UserIcon,
-  Languages,
-  Building,
-  Loader2,
+  Home,
+  MapPin,
   Calendar as CalendarIcon,
-  FileText
+  Building,
+  Briefcase,
+  GraduationCap,
+  DollarSign,
+  Calendar,
+  User as UserIcon,
+  IdCard,
+  Languages,
+  Star
 } from 'lucide-react';
-import { Card, Button, Badge } from '../../../ui';
-import { useGetDoctorByIdQuery } from '../../../../../app/service/doctorApi';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Appointments from '../../../Appointment/Appointment';
 import RequestTable from '../../../Requests/RequestTable';
+import ReviewTable from '../../../Doctor/ReviewTable';
+import { useGetDoctorByIdQuery } from '../../../../../app/service/doctorApi';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
-// ✅ Import shared S3 helper (env-driven base URL)
-import { getS3ImageUrl } from "../../../../../app/service/S3";
+// ✅ Shared S3 helper (env-driven base URL)
+import { getS3ImageUrl as getS3ImageUrlRaw } from '../../../../../app/service/S3';
 
-// Helper functions
+// ============ S3 SIGNED URL CACHE (same pattern as Doctors.jsx / ViewDoctor.jsx) ============
+const signedUrlCache = new Map(); // key -> { url, expiresAt }
+const URL_TTL_MS = 55 * 60 * 1000; // 55 min (presign TTL minus buffer)
+
+const getCached = (key) => {
+  const hit = signedUrlCache.get(key);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    signedUrlCache.delete(key);
+    return null;
+  }
+  return hit.url;
+};
+
+const setCached = (key, url) =>
+  signedUrlCache.set(key, { url, expiresAt: Date.now() + URL_TTL_MS });
+
+const isDirectUrl = (key) =>
+  !!key &&
+  (key.startsWith("http://") ||
+    key.startsWith("https://") ||
+    key.startsWith("data:"));
+
+// ✅ DoctorAvatar — resolves the S3 key to a signed view URL asynchronously.
+// IMPORTANT: never append query params (e.g. ?t=timestamp) to a signed URL —
+// it invalidates the signature.
+const DoctorAvatar = ({ imageKey, name, className, fallbackClassName }) => {
+  const [imageSrc, setImageSrc] = useState(() => {
+    if (!imageKey) return null;
+    if (isDirectUrl(imageKey)) return imageKey;
+    return getCached(imageKey) || null;
+  });
+
+  useEffect(() => {
+    if (!imageKey) {
+      setImageSrc(null);
+      return;
+    }
+
+    // Already a full URL / data URI — no resolution needed.
+    if (isDirectUrl(imageKey)) {
+      setImageSrc(imageKey);
+      return;
+    }
+
+    // Cache hit
+    const cached = getCached(imageKey);
+    if (cached) {
+      setImageSrc(cached);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadImage = async () => {
+      try {
+        const url = await getS3ImageUrlRaw(imageKey);
+        if (cancelled) return;
+        if (url) setCached(imageKey, url);
+        setImageSrc(url);
+      } catch (error) {
+        console.error("Doctor image loading error:", error);
+        if (!cancelled) setImageSrc(null);
+      }
+    };
+
+    loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [imageKey]);
+
+  return (
+    <Avatar className={className}>
+      <AvatarImage
+        src={imageSrc || undefined}
+        alt={name || "Doctor"}
+        className="object-cover"
+      />
+      <AvatarFallback className={fallbackClassName || "text-2xl font-medium bg-gray-200"}>
+        {(name?.[0] || "D").toUpperCase()}
+      </AvatarFallback>
+    </Avatar>
+  );
+};
+// ============ END S3 SIGNED URL CACHE ============
+
+// ============ SKELETON LOADING COMPONENTS ============
+
+const SkeletonText = ({ width = "w-full", height = "h-4", className = "" }) => (
+  <div className={`animate-pulse bg-gray-200 rounded ${width} ${height} ${className}`}></div>
+);
+
+const SkeletonCard = ({ className = "" }) => (
+  <div className={`bg-white rounded-lg border border-gray-200 p-6 mb-6 ${className}`}>
+    <div className="flex flex-col md:flex-row items-start gap-6">
+      <div className="w-24 h-24 rounded-full bg-gray-200 animate-pulse flex-shrink-0"></div>
+      <div className="flex-1 space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <SkeletonText width="w-48" height="h-7" />
+          <SkeletonText width="w-20" height="h-5" className="rounded-full" />
+          <SkeletonText width="w-24" height="h-5" className="rounded-full" />
+        </div>
+        <SkeletonText width="w-40" height="h-4" />
+        <SkeletonText width="w-64" height="h-4" />
+        <div className="flex flex-wrap gap-6">
+          <SkeletonText width="w-32" height="h-4" />
+          <SkeletonText width="w-32" height="h-4" />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const SkeletonTabs = () => (
+  <div className="border-b border-gray-200 px-6">
+    <div className="flex gap-8 overflow-x-auto py-1">
+      {["Basic Information", "Schedule & Consulting", "Appointments", "Requests", "Reviews"].map((_, index) => (
+        <SkeletonText key={index} width="w-32" height="h-8" className="py-2" />
+      ))}
+    </div>
+  </div>
+);
+
+const SkeletonSection = ({ rows = 6, cols = 2 }) => {
+  const totalItems = rows * cols;
+  return (
+    <div className="mb-6">
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
+        <SkeletonText width="w-5" height="h-5" />
+        <SkeletonText width="w-40" height="h-5" />
+      </div>
+      <div className="bg-white rounded-lg border border-gray-100 p-4">
+        <div className={`grid grid-cols-1 md:grid-cols-${cols} gap-4`}>
+          {[...Array(totalItems)].map((_, index) => (
+            <div key={index} className="flex justify-between py-2 border-b border-gray-50 last:border-0">
+              <SkeletonText width="w-28" height="h-4" />
+              <SkeletonText width="w-32" height="h-4" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DoctorDetailsSkeleton = () => (
+  <div className="min-h-screen bg-gray-50">
+    <div className="max-w-6xl mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <SkeletonText width="w-48" height="h-7" />
+        <SkeletonText width="w-36" height="h-9" className="rounded-lg" />
+      </div>
+      <SkeletonCard />
+      <div className="bg-white rounded-lg border border-gray-200">
+        <SkeletonTabs />
+        <div className="p-6">
+          <SkeletonSection rows={3} cols={2} />
+          <SkeletonSection rows={3} cols={2} />
+          <SkeletonSection rows={1} cols={2} />
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ============ END SKELETON ============
+
+const TABS = [
+  { id: "basic", label: "Basic Information" },
+  { id: "schedule", label: "Schedule & Consulting" },
+  { id: "appointments", label: "Appointments" },
+  { id: "requests", label: "Requests" },
+  { id: "reviews", label: "Reviews" }
+];
+
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-4";
+const CARD_CLASS = "bg-white rounded-lg border border-gray-200";
+
+const DAY_ORDER = {
+  monday: 1, tuesday: 2, wednesday: 3, thursday: 4,
+  friday: 5, saturday: 6, sunday: 7
+};
+
 const getValue = (value, fallback = "N/A") => value || fallback;
 const isBookingOpen = (doctor) => doctor?.bookingOpen !== false;
 
@@ -39,7 +227,6 @@ const getDoctorName = (doctor) =>
 const hasAddress = (address) =>
   address && Object.values(address).some(Boolean);
 
-// Format time from 24h to 12h format
 const formatTime = (time) => {
   if (!time || time === 'N/A') return 'N/A';
   const [hours, minutes] = time.split(':');
@@ -54,48 +241,89 @@ const formatDay = (day) => {
   return day.charAt(0).toUpperCase() + day.slice(1);
 };
 
-const DAY_ORDER = {
-  monday: 1,
-  tuesday: 2,
-  wednesday: 3,
-  thursday: 4,
-  friday: 5,
-  saturday: 6,
-  sunday: 7
+const SectionTitle = ({ icon: Icon, title }) => (
+  <h3 className="text-base font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200 flex items-center gap-2">
+    {Icon && <Icon className="h-5 w-5 text-blue-500" />}
+    {title}
+  </h3>
+);
+
+const EmptyState = ({ text, icon: Icon }) => (
+  <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+    {Icon && <Icon className="h-8 w-8 mx-auto mb-2 text-gray-300" />}
+    {text}
+  </div>
+);
+
+const SmallBadge = ({ children, variant = "outline" }) => (
+  <Badge variant={variant} className="text-xs">{children}</Badge>
+);
+
+const DetailRow = ({ label, value, icon: Icon }) => (
+  <div className="flex justify-between py-2 border-b border-gray-50 last:border-0">
+    <span className="text-gray-500 flex items-center gap-2">
+      {Icon && <Icon className="h-4 w-4 text-gray-400" />}
+      {label}
+    </span>
+    <span className="text-gray-800 font-medium">{getValue(value)}</span>
+  </div>
+);
+
+const RatingDisplay = ({ rating, totalReviews }) => {
+  if (!rating && rating !== 0) return null;
+  return (
+    <div className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-full">
+      {[...Array(5)].map((_, index) => (
+        <Star
+          key={index}
+          className={`h-4 w-4 ${
+            index < Math.floor(rating)
+              ? "fill-yellow-400 text-yellow-400"
+              : "text-gray-300"
+          }`}
+        />
+      ))}
+      <span className="text-sm font-medium text-gray-700 ml-1">{rating.toFixed(1)}</span>
+      {totalReviews > 0 && (
+        <span className="text-xs text-gray-500 ml-1">({totalReviews})</span>
+      )}
+    </div>
+  );
 };
 
 const DoctorDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('details');
+  const doctorId = id ? id.replace(/[^0-9]/g, '') : '';
+  const [activeTab, setActiveTab] = useState("basic");
 
   const {
     data: doctorResponse,
     isLoading,
     error,
-  } = useGetDoctorByIdQuery(id, {
-    skip: !id
-  });
+    refetch,
+  } = useGetDoctorByIdQuery(doctorId, { skip: !doctorId });
 
   const doctor = doctorResponse?.data || doctorResponse?.doctor || doctorResponse;
-  const doctorName = getDoctorName(doctor);
   const imageKey = doctor?.imageUrl || doctor?.profileImage || doctor?.imageKey || doctor?.image || null;
+  const doctorName = getDoctorName(doctor);
 
-  // Format consulting hours
+  // ✅ Preserve is_holiday so schedule can render "On Leave"
   const consultingHours = useMemo(() => {
     const hours = [];
-    
+
     if (doctor?.consultingOne && Array.isArray(doctor.consultingOne)) {
       doctor.consultingOne.forEach(item => {
         hours.push({
           day: item.day,
           morningOpen: item.opening_time,
           morningClose: item.closing_time,
-          hasBreak: false
+          hasBreak: false,
+          isHoliday: item.is_holiday === true || item.is_holiday === "true",
         });
       });
     }
-    
+
     if (doctor?.consultingTwo && Array.isArray(doctor.consultingTwo)) {
       doctor.consultingTwo.forEach(item => {
         const morning = item.morning_session;
@@ -106,11 +334,12 @@ const DoctorDetails = () => {
           morningClose: morning?.close,
           eveningOpen: evening?.open,
           eveningClose: evening?.close,
-          hasBreak: true
+          hasBreak: true,
+          isHoliday: item.is_holiday === true || item.is_holiday === "true",
         });
       });
     }
-    
+
     return hours;
   }, [doctor]);
 
@@ -119,322 +348,360 @@ const DoctorDetails = () => {
   );
 
   const outDoorConsulting = doctor?.outDoorConsulting;
-  const hasOutDoorConsulting = outDoorConsulting?.time?.open && 
-                                outDoorConsulting?.time?.close && 
+  const hasOutDoorConsulting = outDoorConsulting?.time?.open &&
+                                outDoorConsulting?.time?.close &&
                                 outDoorConsulting?.place;
 
-  const tabs = [
-    { id: 'details', label: 'Doctor Details' },
-    { id: 'appointments', label: 'Appointments' },
-    { id: 'requests', label: 'Requests' }
-  ];
+  // ============ SKELETON LOADING ============
+  if (isLoading) return <DoctorDetailsSkeleton />;
 
-  // Helper function to render tab icon
-  const getTabIcon = (tabId) => {
-    switch(tabId) {
-      case 'details':
-        return <Stethoscope size={16} className="mr-2" />;
-      case 'appointments':
-        return <CalendarIcon size={16} className="mr-2" />;
-      case 'requests':
-        return <FileText size={16} className="mr-2" />;
-      default:
-        return null;
-    }
-  };
-
-  if (isLoading) {
+  if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-10 w-10 animate-spin text-[#6366F1]" />
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className={`${CARD_CLASS} p-12 text-center`}>
+            <div className="text-red-500 mb-4">
+              <XCircle size={48} className="mx-auto" />
+            </div>
+            <p className="text-lg font-medium text-gray-800">Error loading doctor data</p>
+            <p className="text-sm text-gray-500 mt-2">
+              {error?.data?.message || error?.message || "Service temporarily unavailable"}
+            </p>
+            <div className="flex gap-3 justify-center mt-6">
+              <Button onClick={() => refetch()} className="px-4 py-2">Retry</Button>
+              <Button onClick={() => navigate(-1)} variant="outline" className="px-4 py-2">
+                Back
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (error || !doctor) {
+  if (!doctor) {
     return (
-      <div className="text-center py-12">
-        <Stethoscope size={48} className="text-gray-300 mx-auto mb-3" />
-        <p className="text-gray-500">Doctor not found</p>
-        <Button onClick={() => navigate(-1)} className="mt-4">
-          Back
-        </Button>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className={`${CARD_CLASS} p-12 text-center`}>
+            <p className="text-gray-500">Doctor not found with ID: {doctorId}</p>
+            <Button variant="primary" onClick={() => navigate(-1)} className="mt-6">
+              Back
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      {/* Header with Back Button */}
-      <div className="mb-6">
-        <Button variant="secondary" size="sm" onClick={() => navigate(-1)} className="mb-4">
-          <ArrowLeft size={18} className="mr-1" /> Back
-        </Button>
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-semibold text-gray-800">Doctor Details</h1>
+          <Button variant="outline" onClick={() => navigate(-1)} className="text-sm">
+            ← Back
+          </Button>
+        </div>
 
-      {/* Doctor Profile Card */}
-      <Card className="p-6 mb-6">
-        <div className="flex flex-col md:flex-row gap-6">
-          <Avatar className="w-32 h-32">
-            <AvatarImage 
-              src={getS3ImageUrl(imageKey)} 
-              alt={doctorName}
-              className="object-cover"
+        {/* Profile Card */}
+        <div className={`${CARD_CLASS} p-6 mb-6`}>
+          <div className="flex flex-col md:flex-row items-start gap-6">
+            {/* ✅ FIX: Async-resolving DoctorAvatar instead of passing a Promise into src */}
+            <DoctorAvatar
+              imageKey={imageKey}
+              name={doctorName}
+              className="w-24 h-24"
+              fallbackClassName="text-2xl font-medium bg-gray-200"
             />
-            <AvatarFallback className="text-3xl font-medium bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
-              {doctor?.firstName?.[0]?.toUpperCase() || doctorName?.[0]?.toUpperCase() || "D"}
-            </AvatarFallback>
-          </Avatar>
-          
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-gray-800">{doctorName}</h1>
-              <Badge variant="outline">ID: {doctor?.id}</Badge>
-              <Badge variant={isBookingOpen(doctor) ? "success" : "danger"}>
-                {isBookingOpen(doctor) ? "Bookings Open" : "Bookings Closed"}
-              </Badge>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-              <div className="flex items-center gap-2 text-gray-600">
-                <Briefcase size={16} className="text-blue-500" />
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <h2 className="text-xl font-bold text-gray-800">{doctorName}</h2>
+                <SmallBadge>
+                  ID: DR{String(doctor?.doctorNumber ?? doctor?.id ?? "").padStart(4, "0")}
+                </SmallBadge>
+                <SmallBadge variant={isBookingOpen(doctor) ? "success" : "danger"}>
+                  {isBookingOpen(doctor) ? "Bookings Open" : "Bookings Closed"}
+                </SmallBadge>
+                {doctor?.rating !== undefined && (
+                  <RatingDisplay rating={doctor.rating} totalReviews={doctor.totalReviews} />
+                )}
+              </div>
+
+              <p className="text-gray-600 text-sm flex items-center gap-2 mb-2">
+                <Briefcase className="h-4 w-4 text-blue-500" />
                 <span className="font-medium">Department:</span>
-                <span>{getValue(doctor?.department)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <IdCard size={16} className="text-blue-500" />
-                <span className="font-medium">Specialist:</span>
-                <span>{getValue(doctor?.specialist)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <Phone size={16} className="text-gray-400" />
-                <span>{getValue(doctor?.phone)}</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <Mail size={16} className="text-gray-400" />
-                <span>{getValue(doctor?.email)}</span>
+                <span className="text-gray-800 font-semibold">{getValue(doctor?.department)}</span>
+              </p>
+
+              {doctor?.specialist && doctor?.specialist !== doctor?.department && (
+                <p className="text-gray-500 text-sm flex items-center gap-2 mb-2">
+                  <IdCard className="h-4 w-4 text-gray-400" />
+                  <span className="font-medium">Specialist:</span>
+                  <span>{doctor?.specialist}</span>
+                </p>
+              )}
+
+              <p className="text-gray-500 text-sm mb-3">
+                {getValue(doctor?.about, "No description available")}
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4 text-gray-500 text-sm">
+                <div className="flex items-center gap-2">
+                  <Phone size={14} /><span>{getValue(doctor?.phone)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail size={14} /><span>{getValue(doctor?.email)}</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </Card>
 
-      {/* Custom Tab Navigation */}
-      <div className="border-b border-gray-200 mb-6">
-        <nav className="flex gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center px-4 py-2 text-sm font-medium transition-all duration-200 border-b-2 ${
-                activeTab === tab.id
-                  ? 'border-[#154A7D] text-[#154A7D]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              {getTabIcon(tab.id)}
-              {tab.label}
-            </button>
-          ))}
-        </nav>
-      </div>
+        {/* Tabs */}
+        <div className={CARD_CLASS}>
+          <div className="border-b border-gray-200 px-6">
+            <div className="flex gap-8 overflow-x-auto">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? "text-blue-600 border-b-2 border-blue-600 -mb-px"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
-      {/* Tab Content */}
-      <div className="mt-6">
-        {activeTab === 'details' && (
-          <>
-            {/* Professional Details */}
-            <Card className="p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <Briefcase size={20} className="text-blue-500" />
-                Professional Details
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Qualification</span>
-                  <span className="font-medium">{getValue(doctor?.qualification)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Registration Number</span>
-                  <span className="font-medium">{getValue(doctor?.regNo || doctor?.registrationNumber)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Experience</span>
-                  <span className="font-medium">{doctor?.experience ? `${doctor.experience} years` : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Consultation Fee</span>
-                  <span className="font-medium text-green-600">₹{doctor?.fees || '0'}</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Personal Information */}
-            <Card className="p-6 mb-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <UserIcon size={20} className="text-blue-500" />
-                Personal Information
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">First Name</span>
-                  <span className="font-medium">{getValue(doctor?.firstName)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Last Name</span>
-                  <span className="font-medium">{getValue(doctor?.lastName)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Gender</span>
-                  <span className="font-medium">{getValue(doctor?.gender)}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Date of Birth</span>
-                  <span className="font-medium">{doctor?.dob ? new Date(doctor.dob).toLocaleDateString() : 'N/A'}</span>
-                </div>
-                <div className="flex justify-between py-2 border-b">
-                  <span className="text-gray-500">Joining Date</span>
-                  <span className="font-medium">{doctor?.joiningDate ? new Date(doctor.joiningDate).toLocaleDateString() : 'N/A'}</span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Address Information */}
-            {hasAddress(doctor?.address) && (
-              <Card className="p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <MapPin size={20} className="text-blue-500" />
-                  Address Information
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-500">Country</span>
-                    <span className="font-medium">{getValue(doctor?.address?.country)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-500">State</span>
-                    <span className="font-medium">{getValue(doctor?.address?.state)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-500">District</span>
-                    <span className="font-medium">{getValue(doctor?.address?.district)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-500">Place/City</span>
-                    <span className="font-medium">{getValue(doctor?.address?.place)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-500">Pincode</span>
-                    <span className="font-medium">{getValue(doctor?.address?.pincode)}</span>
+          <div className="p-6">
+            {activeTab === "basic" && (
+              <div className="space-y-6">
+                <div>
+                  <SectionTitle icon={UserIcon} title="Personal Information" />
+                  <div className="bg-white rounded-lg border border-gray-100 p-4">
+                    <div className={GRID_CLASS}>
+                      <DetailRow label="First Name" value={doctor?.firstName} icon={UserIcon} />
+                      <DetailRow label="Last Name" value={doctor?.lastName} icon={UserIcon} />
+                      <DetailRow label="Display Name" value={doctorName} icon={UserIcon} />
+                      <DetailRow
+                        label="Date of Birth"
+                        value={doctor?.dob ? new Date(doctor.dob).toLocaleDateString() : 'N/A'}
+                        icon={CalendarIcon}
+                      />
+                      <DetailRow
+                        label="Gender"
+                        value={doctor?.gender ? doctor.gender.charAt(0).toUpperCase() + doctor.gender.slice(1) : 'N/A'}
+                        icon={UserIcon}
+                      />
+                      <DetailRow
+                        label="Joining Date"
+                        value={doctor?.joiningDate ? new Date(doctor.joiningDate).toLocaleDateString() : 'N/A'}
+                        icon={CalendarIcon}
+                      />
+                    </div>
                   </div>
                 </div>
-              </Card>
-            )}
 
-            {/* Languages Known */}
-            {doctor?.knowLanguages && doctor.knowLanguages.length > 0 && (
-              <Card className="p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Languages size={20} className="text-blue-500" />
-                  Languages Known
-                </h2>
-                <div className="flex flex-wrap gap-2">
-                  {doctor.knowLanguages.map((lang, index) => (
-                    <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                      {lang}
-                    </span>
-                  ))}
+                <div>
+                  <SectionTitle icon={Briefcase} title="Professional Details" />
+                  <div className="bg-white rounded-lg border border-gray-100 p-4">
+                    <div className={GRID_CLASS}>
+                      <DetailRow label="Department" value={doctor?.department} icon={Briefcase} />
+                      <DetailRow label="Specialist" value={doctor?.specialist} icon={IdCard} />
+                      <DetailRow label="Qualification" value={doctor?.qualification} icon={GraduationCap} />
+                      <DetailRow label="Registration Number" value={doctor?.regNo || doctor?.registrationNumber} icon={IdCard} />
+                      <DetailRow label="Experience" value={`${doctor?.experience || 'N/A'} years`} icon={Calendar} />
+                      <DetailRow label="Fees" value={`₹${doctor?.fees || '0'}`} icon={DollarSign} />
+                    </div>
+                  </div>
                 </div>
-              </Card>
-            )}
 
-            {/* Consulting Hours */}
-            {sortedHours.length > 0 && (
-              <Card className="p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Clock size={20} className="text-blue-500" />
-                  Consulting Hours
-                </h2>
-                <div className="space-y-3">
-                  {sortedHours.map((item, index) => (
-                    <div key={index} className="flex flex-col sm:flex-row sm:justify-between sm:items-center py-2 border-b last:border-0">
-                      <div className="flex items-center gap-2 mb-2 sm:mb-0">
-                        <CalendarIcon size={16} className="text-blue-500" />
-                        <span className="font-semibold text-gray-800 capitalize min-w-[100px]">
-                          {formatDay(item.day)}
-                        </span>
-                      </div>
-                      <div className="text-gray-600">
-                        {item.hasBreak ? (
-                          <div className="flex flex-wrap gap-2">
-                            <span className="bg-blue-50 px-3 py-1 rounded-full text-sm">
-                              {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
-                            </span>
-                            <span className="text-gray-400">&</span>
-                            <span className="bg-blue-50 px-3 py-1 rounded-full text-sm">
-                              {formatTime(item.eveningOpen)} - {formatTime(item.eveningClose)}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
-                            {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
-                          </span>
-                        )}
+                <div>
+                  <SectionTitle icon={Phone} title="Contact Information" />
+                  <div className="bg-white rounded-lg border border-gray-100 p-4">
+                    <div className={GRID_CLASS}>
+                      <DetailRow label="Email" value={doctor?.email} icon={Mail} />
+                      <DetailRow label="Phone" value={doctor?.phone} icon={Phone} />
+                    </div>
+                  </div>
+                </div>
+
+                {hasAddress(doctor?.address) && (
+                  <div>
+                    <SectionTitle icon={MapPin} title="Address Information" />
+                    <div className="bg-white rounded-lg border border-gray-100 p-4">
+                      <div className={GRID_CLASS}>
+                        <DetailRow label="Country" value={doctor?.address?.country} icon={MapPin} />
+                        <DetailRow label="State" value={doctor?.address?.state} icon={MapPin} />
+                        <DetailRow label="District" value={doctor?.address?.district} icon={MapPin} />
+                        <DetailRow label="Local Area" value={doctor?.address?.localArea} icon={Home} />
+                        <DetailRow label="Place" value={doctor?.address?.place} icon={MapPin} />
+                        <DetailRow label="Pincode" value={doctor?.address?.pincode} icon={MapPin} />
                       </div>
                     </div>
-                  ))}
-                </div>
-              </Card>
-            )}
-
-            {/* Out Door Consulting */}
-            {hasOutDoorConsulting && (
-              <Card className="p-6 mb-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <Building size={20} className="text-blue-500" />
-                  Out Door Consulting
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Consulting Time</p>
-                    <p className="text-gray-800">
-                      {formatTime(outDoorConsulting.time.open)} - {formatTime(outDoorConsulting.time.close)}
-                    </p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Consulting Place</p>
-                    <p className="text-gray-800">{outDoorConsulting.place}</p>
+                )}
+
+                <div>
+                  <SectionTitle icon={Languages} title="Languages Known" />
+                  <div className="bg-white rounded-lg border border-gray-100 p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {doctor?.knowLanguages && doctor.knowLanguages.length > 0 ? (
+                        doctor.knowLanguages.map((lang, index) => (
+                          <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                            {lang}
+                          </span>
+                        ))
+                      ) : (
+                        <EmptyState text="No languages specified" />
+                      )}
+                    </div>
                   </div>
                 </div>
-              </Card>
+
+                {doctor?.about && (
+                  <div>
+                    <SectionTitle icon={UserIcon} title="About" />
+                    <div className="bg-white rounded-lg border border-gray-100 p-4">
+                      <p className="text-gray-700 leading-relaxed">{doctor?.about}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
-            {/* About Section */}
-            {doctor?.about && (
-              <Card className="p-6">
-                <h2 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                  <UserIcon size={20} className="text-blue-500" />
-                  About Doctor
-                </h2>
-                <p className="text-gray-700 leading-relaxed">{doctor?.about}</p>
-              </Card>
+            {activeTab === "schedule" && (
+              <div className="space-y-6">
+                <div>
+                  <SectionTitle icon={Clock} title="Consulting Hours" />
+                  {sortedHours.length > 0 ? (
+                    <div className="bg-white rounded-lg border border-gray-100 overflow-hidden">
+                      {sortedHours.map((item, index) => (
+                        <div
+                          key={index}
+                          className={`flex flex-col sm:flex-row sm:justify-between sm:items-center py-3 px-4 ${
+                            index !== sortedHours.length - 1 ? 'border-b border-gray-100' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 mb-2 sm:mb-0">
+                            <CalendarIcon className="h-4 w-4 text-blue-500" />
+                            <span className="font-semibold text-gray-800 capitalize min-w-[100px]">
+                              {formatDay(item.day)}
+                            </span>
+                          </div>
+                          <div className="text-gray-600">
+                            {item.isHoliday ? (
+                              <span className="bg-red-50 text-red-600 px-3 py-1 rounded-full text-sm font-medium">
+                                On Leave
+                              </span>
+                            ) : item.hasBreak ? (
+                              <div className="flex flex-wrap gap-2">
+                                <span className="bg-blue-50 px-3 py-1 rounded-full text-sm">
+                                  {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
+                                </span>
+                                <span className="text-gray-400">&</span>
+                                <span className="bg-blue-50 px-3 py-1 rounded-full text-sm">
+                                  {formatTime(item.eveningOpen)} - {formatTime(item.eveningClose)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="bg-gray-100 px-3 py-1 rounded-full text-sm">
+                                {formatTime(item.morningOpen)} - {formatTime(item.morningClose)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState text="No consulting hours configured" icon={Clock} />
+                  )}
+                </div>
+
+                <div>
+                  <SectionTitle icon={Building} title="Out Door Consulting" />
+                  {hasOutDoorConsulting ? (
+                    <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-5 border border-blue-100">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-blue-500" /> Consulting Time
+                          </p>
+                          <div className="bg-white rounded-lg p-3 border border-gray-100">
+                            <div className="flex justify-between items-center">
+                              <span className="text-gray-500">Open Time:</span>
+                              <span className="font-medium text-gray-800">{formatTime(outDoorConsulting.time.open)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mt-2">
+                              <span className="text-gray-500">Close Time:</span>
+                              <span className="font-medium text-gray-800">{formatTime(outDoorConsulting.time.close)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                            <MapPin className="h-4 w-4 text-blue-500" /> Consulting Place
+                          </p>
+                          <div className="bg-white rounded-lg p-3 border border-gray-100">
+                            <p className="text-gray-700 flex items-center gap-2">
+                              <MapPin className="h-4 w-4 text-gray-400" />
+                              {outDoorConsulting.place}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState text="No out door consulting configured" icon={Building} />
+                  )}
+                </div>
+
+                <div>
+                  <SectionTitle icon={Video} title="Booking Status" />
+                  <div className="bg-gradient-to-r from-gray-50 to-white rounded-xl p-5 border border-gray-200">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Booking Availability</p>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Allow patients to book appointments with this doctor
+                        </p>
+                      </div>
+                      {isBookingOpen(doctor) ? (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-200 w-fit">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-700">Bookings Open</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 rounded-full border border-red-200 w-fit">
+                          <XCircle className="h-4 w-4 text-red-600" />
+                          <span className="text-sm font-medium text-red-700">Bookings Closed</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </>
-        )}
 
-        {activeTab === 'appointments' && (
-          <Appointments 
-            doctorId={doctor?.id} 
-            doctorName={doctorName} 
-          />
-        )}
+            {activeTab === "appointments" && (
+              <Appointments doctorId={doctor?.id} doctorName={doctorName} />
+            )}
 
-        {activeTab === 'requests' && (
-          <RequestTable 
-            doctorId={doctor?.id} 
-            doctorName={doctorName} 
-          />
-        )}
+            {activeTab === "requests" && (
+              <RequestTable doctorId={doctor?.id} doctorName={doctorName} />
+            )}
+
+            {activeTab === "reviews" && (
+              <ReviewTable doctorId={doctor?.id} doctorName={doctorName} />
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

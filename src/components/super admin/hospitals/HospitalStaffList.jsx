@@ -7,7 +7,7 @@ import {
   Filter, X, RotateCcw, ChevronLeft, ChevronRight, Users as UsersIcon
 } from 'lucide-react';
 import { Card, Button, Modal, Badge } from '../../ui';
-import CustomSelect from '../../ui/CustomSelect'; // ✅ Added import
+import CustomSelect from '../../ui/CustomSelect';
 import { useGetStaffQuery, useDeleteStaffMutation, useRecoverStaffMutation } from '../../../../app/service/staffApi';
 import StaffDetailsModal from './staff/staffDetails';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
@@ -16,6 +16,33 @@ import { registerStaffEvents, unregisterStaffEvents } from '../../../socket/staf
 import { getHospitalId, isDoctor, isStaff, isHospitalAdmin } from '../../../utils/auth';
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { getS3ImageUrl } from '../../../../app/service/S3';
+
+// ================= ✅ S3 HELPERS (same pattern as HospitalDoctorsList) =================
+
+// Async resolver — no cache-busting on signed S3 URLs
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey || typeof imageKey !== 'string') return null;
+
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
+    return imageKey;
+  }
+
+  const url = await getS3ImageUrl(imageKey);
+  return url || null;
+};
+
+// Extract the raw image field from a staff member (handles all possible backends keys)
+const getStaffRawImage = (staff) =>
+  staff?.imageUrl ||
+  staff?.profileImage ||
+  staff?.imageKey ||
+  staff?.image ||
+  null;
 
 // ================= PAGINATION COMPONENT =================
 const Pagination = ({ 
@@ -104,6 +131,10 @@ const HospitalStaffList = () => {
   // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
 
+  // ✅ S3 image state (matches HospitalDoctorsList pattern)
+  const [resolvedImages, setResolvedImages] = useState({});
+  const [imageErrors, setImageErrors] = useState({});
+
   // Auth
   const authHospitalId = getHospitalId();
   const isDoctorRole = isDoctor();
@@ -151,11 +182,11 @@ const HospitalStaffList = () => {
   const totalItems = staffData?.pagination?.totalItems || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-  // ✅ Check if filters are active - MUST be before conditional return
+  // Check if filters are active - MUST be before conditional return
   const hasSearchTerm = searchTerm && searchTerm.trim().length >= 2;
   const hasActiveFilters = genderFilter !== 'all' || designationFilter !== 'all' || statusFilter !== 'all';
 
-  // ✅ FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
+  // FRONTEND SEARCH FILTERING - FALLBACK when API doesn't filter properly
   const filteredStaff = useMemo(() => {
     if (!searchTerm || searchTerm.trim().length < 2) {
       return allStaff;
@@ -178,7 +209,7 @@ const HospitalStaffList = () => {
     });
   }, [allStaff, searchTerm]);
 
-  // ✅ Apply gender filter (frontend fallback)
+  // Apply gender filter (frontend fallback)
   const filteredByGender = useMemo(() => {
     if (genderFilter === 'all') return filteredStaff;
     return filteredStaff.filter(item => 
@@ -186,7 +217,7 @@ const HospitalStaffList = () => {
     );
   }, [filteredStaff, genderFilter]);
 
-  // ✅ Apply designation filter (frontend fallback)
+  // Apply designation filter (frontend fallback)
   const filteredByDesignation = useMemo(() => {
     if (designationFilter === 'all') return filteredByGender;
     return filteredByGender.filter(item => 
@@ -194,7 +225,7 @@ const HospitalStaffList = () => {
     );
   }, [filteredByGender, designationFilter]);
 
-  // ✅ Apply status filter (frontend fallback)
+  // Apply status filter (frontend fallback)
   const filteredStaffFinal = useMemo(() => {
     if (statusFilter === 'all') return filteredByDesignation;
     return filteredByDesignation.filter(item => {
@@ -204,17 +235,55 @@ const HospitalStaffList = () => {
     });
   }, [filteredByDesignation, statusFilter]);
 
-  // ✅ Use filteredStaffFinal for display instead of allStaff
+  // Use filteredStaffFinal for display instead of allStaff
   const displayStaff = filteredStaffFinal;
   const displayTotalItems = displayStaff.length;
   const displayTotalPages = Math.ceil(displayTotalItems / itemsPerPage);
 
-  // ✅ Paginate the filtered results
+  // Paginate the filtered results
   const paginatedStaff = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return displayStaff.slice(startIndex, endIndex);
   }, [displayStaff, currentPage, itemsPerPage]);
+
+  // ================= ✅ ASYNC IMAGE LOADING (same as HospitalDoctorsList) =================
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStaffImages = async () => {
+      const entries = await Promise.all(
+        allStaff.map(async (staff) => {
+          const raw = getStaffRawImage(staff);
+          if (!raw) return [staff.id, null];
+          try {
+            const url = await getFullImageUrl(raw);
+            return [staff.id, url];
+          } catch (error) {
+            console.error('Staff image loading failed:', staff.id, error);
+            return [staff.id, null];
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setResolvedImages(Object.fromEntries(entries));
+      }
+    };
+
+    if (allStaff.length > 0) {
+      loadStaffImages();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allStaff]);
+
+  // ✅ Per-item image error handler
+  const handleImageError = (staffId) => {
+    setImageErrors((prev) => ({ ...prev, [staffId]: true }));
+  };
 
   // Get unique designations for filter
   const getAllDesignations = () => {
@@ -222,7 +291,7 @@ const HospitalStaffList = () => {
     return designations.sort();
   };
 
-  // ✅ Build options for CustomSelect
+  // Build options for CustomSelect
   const genderOptions = [
     { value: 'all', label: 'All Genders' },
     { value: 'Male', label: 'Male' },
@@ -256,19 +325,6 @@ const HospitalStaffList = () => {
     ].filter(Boolean);
     
     return parts.length > 0 ? parts.join(', ') : 'N/A';
-  };
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    try {
-      return new Date(date).toLocaleDateString('en-US', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      });
-    } catch (error) {
-      return '';
-    }
   };
 
   const getStringValue = (value) => {
@@ -431,24 +487,12 @@ const HospitalStaffList = () => {
   // Register socket event listeners
   useEffect(() => {
     registerStaffEvents({
-      onStaffRegistered: () => {
-        refetch();
-      },
-      onStaffUpdated: () => {
-        refetch();
-      },
-      onStaffDeleted: () => {
-        refetch();
-      },
-      onStaffRecovered: () => {
-        refetch();
-      },
-      onStaffPasswordReset: () => {
-        refetch();
-      },
-      onStaffPasswordChanged: () => {
-        refetch();
-      }
+      onStaffRegistered: () => { refetch(); },
+      onStaffUpdated: () => { refetch(); },
+      onStaffDeleted: () => { refetch(); },
+      onStaffRecovered: () => { refetch(); },
+      onStaffPasswordReset: () => { refetch(); },
+      onStaffPasswordChanged: () => { refetch(); }
     });
 
     setEventsRegistered(true);
@@ -464,24 +508,12 @@ const HospitalStaffList = () => {
     const handleConnect = () => {
       if (!eventsRegistered) {
         registerStaffEvents({
-          onStaffRegistered: () => {
-            refetch();
-          },
-          onStaffUpdated: () => {
-            refetch();
-          },
-          onStaffDeleted: () => {
-            refetch();
-          },
-          onStaffRecovered: () => {
-            refetch();
-          },
-          onStaffPasswordReset: () => {
-            refetch();
-          },
-          onStaffPasswordChanged: () => {
-            refetch();
-          }
+          onStaffRegistered: () => { refetch(); },
+          onStaffUpdated: () => { refetch(); },
+          onStaffDeleted: () => { refetch(); },
+          onStaffRecovered: () => { refetch(); },
+          onStaffPasswordReset: () => { refetch(); },
+          onStaffPasswordChanged: () => { refetch(); }
         });
         setEventsRegistered(true);
       }
@@ -576,7 +608,7 @@ const HospitalStaffList = () => {
     );
   };
 
-  // ✅ Loading state - AFTER all hooks
+  // Loading state - AFTER all hooks
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -691,7 +723,6 @@ const HospitalStaffList = () => {
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Gender Filter - CustomSelect */}
             <CustomSelect
               label="Gender"
               value={genderFilter}
@@ -700,7 +731,6 @@ const HospitalStaffList = () => {
               placeholder="All Genders"
             />
 
-            {/* Designation Filter - CustomSelect */}
             <CustomSelect
               label="Designation"
               value={designationFilter}
@@ -709,7 +739,6 @@ const HospitalStaffList = () => {
               placeholder="All Designations"
             />
 
-            {/* Status Filter - CustomSelect */}
             <CustomSelect
               label="Status"
               value={statusFilter}
@@ -729,6 +758,10 @@ const HospitalStaffList = () => {
               const isDeleted = staffMember.isDelete || false;
               const isInactive = !staffMember.isActive && !isDeleted;
               const isDisabled = isDeleted || isInactive;
+
+              // ✅ Resolved S3 image for this staff member (same as doctors list)
+              const imageUrl = resolvedImages[staffMember.id] || null;
+              const hasImageError = imageErrors[staffMember.id];
               
               return (
                 <Card 
@@ -743,14 +776,18 @@ const HospitalStaffList = () => {
                 >
                   <div className="flex items-start gap-3">
                     <Avatar className={`w-12 h-12 ${isDeleted ? 'opacity-60' : ''}`}>
-                      <AvatarImage 
-                        src={getS3ImageUrl(staffMember.imageKey || staffMember.profileImage)} 
-                        alt={staffMember.name}
-                        className="object-cover"
-                      />
-                      <AvatarFallback className={`${isDeleted ? 'bg-gray-300 text-gray-500' : 'bg-purple-100 text-purple-600'} text-base font-medium`}>
-                        {staffMember.name?.charAt(0)?.toUpperCase() || 'S'}
-                      </AvatarFallback>
+                      {imageUrl && !hasImageError ? (
+                        <AvatarImage 
+                          src={imageUrl} 
+                          alt={staffMember.name}
+                          className="object-cover"
+                          onError={() => handleImageError(staffMember.id)}
+                        />
+                      ) : (
+                        <AvatarFallback className={`${isDeleted ? 'bg-gray-300 text-gray-500' : 'bg-purple-100 text-purple-600'} text-base font-medium`}>
+                          {staffMember.name?.charAt(0)?.toUpperCase() || 'S'}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                     
                     <div className="flex-1 min-w-0">

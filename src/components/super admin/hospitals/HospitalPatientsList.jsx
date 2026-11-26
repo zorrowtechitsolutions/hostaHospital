@@ -1,20 +1,20 @@
 // src/components/super-admin/HospitalPatientsList.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, Search, User, Phone, Mail, MapPin, Loader2, 
-  Calendar, Droplet, MoreVertical, Eye, Edit, Trash2, 
+import {
+  ArrowLeft, Search, User, Phone, Mail, MapPin, Loader2,
+  Calendar, Droplet, MoreVertical, Eye, Edit, Trash2,
   Plus, RotateCcw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Card, Button, Badge } from '../../ui';
-import { 
-  useGetPatientsQuery, 
+import {
+  useGetPatientsQuery,
   useDeletePatientMutation,
   useRecoverPatientMutation
 } from '../../../../app/service/patients';
 import { showSuccessToast, showErrorToast } from '../../ui/Toast';
 import { socket } from '../../../socket/socket';
-import { registerPatientEvents} from '../../../socket/patientEvents';
+import { registerPatientEvents } from '../../../socket/patientEvents';
 import DeleteModal from '../../patients/DeleteModel';
 import AddAppointmentModal from '../../patients/AddAppointmentModal';
 import ApproveRequestModal from '../../Requests/ApproveRequestModel';
@@ -25,23 +25,46 @@ import { getS3ImageUrl } from '../../../../app/service/S3';
 
 // ================= HELPER FUNCTIONS =================
 
-// Get S3 image URL with cache busting
-const getImageUrlWithCache = (imageKey) => {
-  if (!imageKey) return null;
-  const url = getS3ImageUrl(imageKey);
-  if (!url) return null;
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}_t=${Date.now()}`;
+// ✅ Async resolver — no cache-busting on signed S3 URLs
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey || typeof imageKey !== 'string') return null;
+
+  if (
+    imageKey.startsWith('http://') ||
+    imageKey.startsWith('https://') ||
+    imageKey.startsWith('data:') ||
+    imageKey.startsWith('blob:')
+  ) {
+    return imageKey;
+  }
+
+  try {
+    const url = await getS3ImageUrl(imageKey);
+    return url || null;
+  } catch {
+    return null;
+  }
+};
+
+const getPatientRawImage = (patient) =>
+  patient?.imageKey ||
+  patient?.profileImage ||
+  patient?.image ||
+  null;
+
+const formatPatientId = (id) => {
+  if (!id) return '#PT0000';
+  return `#PT00${String(id).slice(-6)}`;
 };
 
 // ================= PAGINATION COMPONENT =================
-const Pagination = ({ 
-  currentPage, 
-  totalPages, 
-  onPageChange, 
-  totalItems, 
+const Pagination = ({
+  currentPage,
+  totalPages,
+  onPageChange,
+  totalItems,
   itemsPerPage,
-  isLoading 
+  isLoading
 }) => {
   if (totalPages <= 1) return null;
 
@@ -55,7 +78,7 @@ const Pagination = ({
         <span className="font-medium text-gray-700">{endItem}</span> of{' '}
         <span className="font-medium text-gray-700">{totalItems}</span>
       </div>
-      
+
       <div className="flex items-center gap-2">
         <button
           onClick={() => onPageChange(currentPage - 1)}
@@ -91,104 +114,289 @@ const Pagination = ({
   );
 };
 
+// ================= PATIENT ACTION MENU =================
+// Hoisted out of the parent so its identity is stable across renders
+const PatientActionMenu = ({
+  patient,
+  activeMenu,
+  onToggleMenu,
+  onView,
+  onEdit,
+  onDelete,
+  onAddAppointment,
+  onRecover,
+  canModifyPatients,
+}) => {
+  const isDeleted = patient.isDelete;
+  const isInactive = !patient.isActive && !isDeleted;
+  const isDisabled = isDeleted || isInactive;
+  const patientId = patient.id || patient._id;
+
+  return (
+    <div className="relative inline-block menu-container">
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!isDisabled) onToggleMenu(patientId, e);
+        }}
+        className={`p-2 rounded transition-colors ${
+          isDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'
+        }`}
+        disabled={isDisabled}
+      >
+        <MoreVertical size={18} className={isDisabled ? 'text-gray-300' : 'text-gray-600'} />
+      </button>
+
+      {activeMenu === patientId && !isDisabled && (
+        <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1">
+          {!isDeleted && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onView(patient); }}
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Eye size={16} /> View Details
+              </button>
+
+              {canModifyPatients && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onEdit(patient); }}
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                >
+                  <Edit size={16} /> Edit
+                </button>
+              )}
+
+              <button
+                onClick={(e) => { e.stopPropagation(); onAddAppointment(patient); }}
+                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
+              >
+                <Calendar size={16} /> Add Appointment
+              </button>
+
+              <div className="border-t border-gray-100 my-1"></div>
+
+              {canModifyPatients && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(patient); }}
+                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                >
+                  <Trash2 size={16} /> Delete
+                </button>
+              )}
+            </>
+          )}
+
+          {isDeleted && canModifyPatients && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onRecover(patient); }}
+              className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
+            >
+              <RotateCcw size={16} /> Recover Patient
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ================= MAIN COMPONENT =================
 const HospitalPatientsList = () => {
-  // ✅ Get hospital ID from route params - same as HospitalDoctorsList
   const { id: hospitalId } = useParams();
   const navigate = useNavigate();
-  const menuRef = useRef(null);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [patientToDelete, setPatientToDelete] = useState(null);
-  const [imageErrors, setImageErrors] = useState({});
+
   const itemsPerPage = 10;
 
-  const [eventsRegistered, setEventsRegistered] = useState(false);
-  
+  // ✅ Holds the cleanup returned by registerPatientEvents()
+  const patientCleanupRef = useRef(null);
+
   // Modal states
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [appointmentPatient, setAppointmentPatient] = useState(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [bookingData, setBookingData] = useState(null);
-  
+
   // Menu state
   const [activeMenu, setActiveMenu] = useState(null);
 
-  // Auth - same as HospitalDoctorsList
+  // Async resolved S3 image URLs keyed by patient ID
+  const [resolvedImages, setResolvedImages] = useState({});
+  const [imageErrors, setImageErrors] = useState({});
+
+  // Auth
   const authHospitalId = getHospitalId();
   const isDoctorRole = isDoctor();
   const isStaffRole = isStaff();
   const isHospitalAdminRole = isHospitalAdmin();
   const canModifyPatients = isHospitalAdminRole || (!isDoctorRole && !isStaffRole);
 
-  // ✅ Use hospitalId from route params - same as HospitalDoctorsList
-  const { data: patientsData, isLoading, refetch, isFetching } = useGetPatientsQuery({
+  // Data
+  const {
+    data: patientsData,
+    isLoading,
+    refetch,
+    isFetching,
+  } = useGetPatientsQuery({
     hospitalId: hospitalId,
     page: currentPage,
     limit: itemsPerPage,
-    search_query: searchTerm || undefined
+    search_query: searchTerm || undefined,
   });
 
   const [deletePatient] = useDeletePatientMutation();
   const [recoverPatient] = useRecoverPatientMutation();
   const [createBooking, { isLoading: isCreatingBooking }] = useCreateBookingMutation();
 
-  const patients = patientsData?.data || [];
-  const totalItems = patientsData?.pagination?.totalItems || 0;
+  const allPatients = useMemo(
+    () => patientsData?.data || [],
+    [patientsData]
+  );
+  const totalItems = patientsData?.pagination?.totalItems || allPatients.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   // Transform data
-  const transformPatientData = (patients) => {
-    if (!patients || !Array.isArray(patients)) return [];
-    return patients.map((patient) => ({
+  const transformedPatients = useMemo(() => {
+    if (!Array.isArray(allPatients)) return [];
+    return allPatients.map((patient) => ({
       ...patient,
       isDelete: patient.isDelete || false,
-      isActive: patient.isActive !== undefined ? patient.isActive : true
+      isActive: patient.isActive !== undefined ? patient.isActive : true,
     }));
+  }, [allPatients]);
+
+  // ================= SOCKET REGISTRATION =================
+  // ✅ Uses the factory-return API of patientEvents.js — no named unregister needed
+
+  const registerPatientSocket = () => {
+    // Clean up any previous registration first
+    if (patientCleanupRef.current) {
+      patientCleanupRef.current();
+      patientCleanupRef.current = null;
+    }
+
+    patientCleanupRef.current = registerPatientEvents({
+      onRegistered: () => refetch(),
+      onUpdated: () => refetch(),
+      onDeleted: () => refetch(),
+      onRecovered: () => refetch(),
+    });
   };
 
-  const transformedPatients = transformPatientData(patients);
+  useEffect(() => {
+    registerPatientSocket();
 
-  // Helper functions
-  const formatPatientId = (id) => {
-    if (!id) return '#PT0000';
-    return `#PT00${String(id).slice(-6)}`;
-  };
+    return () => {
+      if (patientCleanupRef.current) {
+        patientCleanupRef.current();
+        patientCleanupRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetch]);
 
-  const getPatientImage = (patient) => {
-    const imageKey = patient?.imageKey || patient?.profileImage || patient?.image || null;
-    return imageKey ? getImageUrlWithCache(imageKey) : null;
-  };
+  // Re-register on reconnect (e.g. after a dropped socket)
+  useEffect(() => {
+    const handleConnect = () => {
+      if (!patientCleanupRef.current) {
+        registerPatientSocket();
+      }
+    };
+    socket.on('connect', handleConnect);
+    return () => {
+      socket.off('connect', handleConnect);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetch]);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // Click outside to close menu
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        activeMenu !== null &&
+        !event.target.closest('.menu-container')
+      ) {
+        setActiveMenu(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [activeMenu]);
+
+  // ================= ASYNC IMAGE LOADING =================
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPatientImages = async () => {
+      const entries = await Promise.all(
+        transformedPatients.map(async (patient) => {
+          const raw = getPatientRawImage(patient);
+          if (!raw) return [patient.id || patient._id, null];
+          try {
+            const url = await getFullImageUrl(raw);
+            return [patient.id || patient._id, url];
+          } catch (error) {
+            console.error('Patient image loading failed:', patient.id || patient._id, error);
+            return [patient.id || patient._id, null];
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setResolvedImages(Object.fromEntries(entries));
+      }
+    };
+
+    loadPatientImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [transformedPatients]);
+
+  // ================= HANDLERS =================
 
   const handleImageError = (patientId) => {
-    setImageErrors(prev => ({ ...prev, [patientId]: true }));
+    setImageErrors((prev) => ({ ...prev, [patientId]: true }));
   };
 
-  // ✅ CRUD Handlers with hospitalId
+  const toggleMenu = (patientId, e) => {
+    if (e) e.stopPropagation();
+    setActiveMenu(activeMenu === patientId ? null : patientId);
+  };
+
   const handleAddPatient = () => {
     if (!canModifyPatients) {
       showErrorToast('You do not have permission to add patients', 3000);
       return;
     }
-    // ✅ Navigate to nested patient add route with hospitalId in state
     navigate(`/super-admin/hospitals/${hospitalId}/patients/add`, {
-      state: { hospitalId: hospitalId }
+      state: { hospitalId: hospitalId },
     });
   };
 
   const handleViewDetails = (patient) => {
     if (patient.isDelete) {
-      showErrorToast("Cannot view details of deleted patient", 3000);
+      showErrorToast('Cannot view details of deleted patient', 3000);
       return;
     }
     if (!patient.isActive) {
-      showErrorToast("Cannot view details of inactive patient", 3000);
+      showErrorToast('Cannot view details of inactive patient', 3000);
       return;
     }
 
     const patientId = patient.id || patient._id;
-    // ✅ Navigate to nested patient details route
     navigate(`/super-admin/hospitals/${hospitalId}/patients/${patientId}`, {
       state: {
         patient,
@@ -212,15 +420,14 @@ const HospitalPatientsList = () => {
       showErrorToast('Cannot edit inactive patient', 3000);
       return;
     }
-    
+
     const patientId = patient.id || patient._id;
-    // ✅ Navigate to nested patient edit route
     navigate(`/super-admin/hospitals/${hospitalId}/patients/edit/${patientId}`, {
       state: {
         patient,
         hospitalId: hospitalId,
-        returnPath: window.location.pathname
-      }
+        returnPath: window.location.pathname,
+      },
     });
     setActiveMenu(null);
   };
@@ -243,17 +450,17 @@ const HospitalPatientsList = () => {
     if (!patientToDelete) return;
     try {
       await deletePatient(patientToDelete.id || patientToDelete._id).unwrap();
-      
-      socket.emit("patient_event", {
-        event: "PATIENT_DELETED",
+
+      socket.emit('patient_event', {
+        event: 'PATIENT_DELETED',
         data: {
           patientId: patientToDelete.id || patientToDelete._id,
           patientName: patientToDelete.name,
           hospitalId: hospitalId,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
-      
+
       await refetch();
       setShowModal(false);
       setPatientToDelete(null);
@@ -270,17 +477,17 @@ const HospitalPatientsList = () => {
     }
     try {
       await recoverPatient(patient.id || patient._id).unwrap();
-      
-      socket.emit("patient_event", {
-        event: "PATIENT_RECOVERED",
+
+      socket.emit('patient_event', {
+        event: 'PATIENT_RECOVERED',
         data: {
           patientId: patient.id || patient._id,
           patientName: patient.name,
           hospitalId: hospitalId,
-          timestamp: new Date().toISOString()
-        }
+          timestamp: new Date().toISOString(),
+        },
       });
-      
+
       showSuccessToast(`${patient.name} recovered successfully!`, 2000);
       refetch();
       setActiveMenu(null);
@@ -316,7 +523,9 @@ const HospitalPatientsList = () => {
   const handleConfirmAppointment = async (approveData) => {
     try {
       const payload = {
-        patientId: bookingData?.patientId ? Number(bookingData.patientId.replace("#PT00", "")) : null,
+        patientId: bookingData?.patientId
+          ? Number(bookingData.patientId.replace('#PT00', ''))
+          : null,
         userId: Number(bookingData?.userId),
         patient_name: bookingData?.patient_name,
         patient_dob: bookingData?.patient_dob,
@@ -331,170 +540,23 @@ const HospitalPatientsList = () => {
         displayName: bookingData?.displayName,
         consulting_time: approveData?.consulting_time,
         token: approveData?.token ? parseInt(approveData.token) : null,
-        status: "accepted",
-        booking_status: "hospital booking"
+        status: 'accepted',
+        booking_status: 'hospital booking',
       };
 
       await createBooking(payload).unwrap();
 
-      showSuccessToast("Appointment confirmed successfully!", 4000);
+      showSuccessToast('Appointment confirmed successfully!', 4000);
       setShowApproveModal(false);
       setBookingData(null);
       setAppointmentPatient(null);
       navigate('/super-admin/appointments');
     } catch (err) {
-      showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
+      showErrorToast(err?.data?.message || 'Failed to confirm appointment', 3000);
     }
   };
 
-  // Register socket event listeners
-  useEffect(() => {
-
-  const cleanup = registerPatientEvents({
-    onRegistered: (eventData) => {
-      refetchPatients();
-    },
-
-    onUpdated: (eventData) => {
-      refetchPatients();
-    },
-
-    onDeleted: (eventData) => {
-      refetchPatients();
-    },
-
-    onRecovered: (eventData) => {
-      refetchPatients();
-    },
-
-    onUnknown: (eventData) => {
-    },
-  });
-
-  return cleanup;
-}, [refetchPatients]);
-
-  // Listen for socket connection
-  useEffect(() => {
-    const handleConnect = () => {
-      if (!eventsRegistered) {
-        registerPatientEvents({
-          onPatientRegistered: () => {
-            refetch();
-          },
-          onPatientUpdated: () => {
-            refetch();
-          },
-          onPatientDeleted: () => {
-            refetch();
-          },
-          onPatientRecovered: () => {
-            refetch();
-          }
-        });
-        setEventsRegistered(true);
-      }
-    };
-
-    socket.on("connect", handleConnect);
-
-    return () => {
-      socket.off("connect", handleConnect);
-    };
-  }, [refetch, eventsRegistered]);
-
-  // Reset page when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
-  // Handle click outside for menu
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setActiveMenu(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const toggleMenu = (patientId) => {
-    setActiveMenu(activeMenu === patientId ? null : patientId);
-  };
-
-  // Row Action Menu with 3 dots
-  const RowActionMenu = ({ patient }) => {
-    const isDeleted = patient.isDelete;
-    const isInactive = !patient.isActive && !isDeleted;
-    const isDisabled = isDeleted || isInactive;
-    const patientId = patient.id || patient._id;
-
-    return (
-      <div className="relative inline-block">
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isDisabled) {
-              toggleMenu(patientId);
-            }
-          }} 
-          className={`p-2 rounded transition-colors ${isDisabled ? 'text-gray-300 cursor-not-allowed' : 'hover:bg-gray-100'}`}
-          disabled={isDisabled}
-        >
-          <MoreVertical size={18} className={isDisabled ? 'text-gray-300' : 'text-gray-600'} />
-        </button>
-        {activeMenu === patientId && !isDisabled && (
-          <div 
-            ref={menuRef}
-            className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
-          >
-            {!isDeleted && (
-              <>
-                <button 
-                  onClick={() => { handleViewDetails(patient); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  <Eye size={16} /> View Details
-                </button>
-                {canModifyPatients && (
-                  <button 
-                    onClick={() => { handleEditPatient(patient); }} 
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <Edit size={16} /> Edit
-                  </button>
-                )}
-                <button 
-                  onClick={() => { handleAddAppointmentModal(patient); }} 
-                  className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100"
-                >
-                  <Calendar size={16} /> Add Appointment
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                {canModifyPatients && (
-                  <button 
-                    onClick={() => { handleDeleteClick(patient); }} 
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-                  >
-                    <Trash2 size={16} /> Delete
-                  </button>
-                )}
-              </>
-            )}
-            {isDeleted && canModifyPatients && (
-              <button 
-                onClick={() => { handleRecoverPatient(patient); }} 
-                className="flex items-center gap-2 w-full px-4 py-2 text-sm text-green-600 hover:bg-gray-100"
-              >
-                <RotateCcw size={16} /> Recover Patient
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  };
+  // ================= RENDER =================
 
   if (isLoading) {
     return (
@@ -506,20 +568,20 @@ const HospitalPatientsList = () => {
 
   return (
     <div>
-      {/* Header with Add Patient Button */}
+      {/* Header */}
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-          <Button 
-            variant="secondary" 
-            size="sm" 
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => navigate(`/super-admin/hospitals/${hospitalId}`)}
             className="flex items-center"
           >
             <ArrowLeft size={18} className="mr-1" /> Back to Hospital Details
           </Button>
           {canModifyPatients && (
-            <Button 
-              onClick={handleAddPatient} 
+            <Button
+              onClick={handleAddPatient}
               className="flex items-center gap-2 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
             >
               <Plus size={16} /> Add Patient
@@ -533,7 +595,10 @@ const HospitalPatientsList = () => {
       {/* Search Bar */}
       <div className="mb-6">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder="Search patients by name or phone..."
@@ -547,19 +612,20 @@ const HospitalPatientsList = () => {
       {/* Patients Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
         {transformedPatients.map((patient) => {
+          const patientId = patient.id || patient._id;
           const isDeleted = patient.isDelete;
           const isInactive = !patient.isActive && !isDeleted;
           const isDisabled = isDeleted || isInactive;
-          const imageUrl = getPatientImage(patient);
-          const hasImageError = imageErrors[patient.id || patient._id];
+          const imageUrl = resolvedImages[patientId] || null;
+          const hasImageError = imageErrors[patientId];
           const patientName = patient.name || 'Patient';
-          
+
           return (
-            <Card 
-              key={patient.id || patient._id} 
+            <Card
+              key={patientId}
               className={`p-4 transition-shadow ${
-                isDeleted 
-                  ? 'bg-gray-50 border-gray-300 opacity-60' 
+                isDeleted
+                  ? 'bg-gray-50 border-gray-300 opacity-60'
                   : isInactive
                   ? 'bg-gray-50 border-gray-200'
                   : 'hover:shadow-md'
@@ -568,25 +634,32 @@ const HospitalPatientsList = () => {
               <div className="flex items-start gap-3">
                 <Avatar className={`w-12 h-12 ${isDeleted ? 'opacity-60' : ''}`}>
                   {imageUrl && !hasImageError ? (
-                    <AvatarImage 
-                      src={imageUrl} 
+                    <AvatarImage
+                      src={imageUrl}
                       alt={patientName}
                       className="object-cover"
-                      onError={() => handleImageError(patient.id || patient._id)}
+                      onError={() => handleImageError(patientId)}
                     />
                   ) : (
-                    <AvatarFallback className={`${isDeleted ? 'bg-gray-300 text-gray-500' : 'bg-blue-100 text-blue-600'} text-base font-medium`}>
-                      {patientName.charAt(0)?.toUpperCase() || "P"}
+                    <AvatarFallback
+                      className={`${
+                        isDeleted
+                          ? 'bg-gray-300 text-gray-500'
+                          : 'bg-blue-100 text-blue-600'
+                      } text-base font-medium`}
+                    >
+                      {patientName.charAt(0)?.toUpperCase() || 'P'}
                     </AvatarFallback>
                   )}
                 </Avatar>
+
                 <div className="flex-1">
                   <div className="flex items-start justify-between">
                     <div>
                       <h3 className={`font-semibold ${isDeleted ? 'text-gray-500' : 'text-gray-900'}`}>
                         {patientName}
                       </h3>
-                      <p className="text-xs text-gray-500">ID: {formatPatientId(patient.id || patient._id)}</p>
+                      <p className="text-xs text-gray-500">ID: {formatPatientId(patientId)}</p>
                       {isDeleted && (
                         <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 mt-1">
                           Blacklisted
@@ -598,12 +671,26 @@ const HospitalPatientsList = () => {
                         </Badge>
                       )}
                     </div>
-                    <RowActionMenu patient={patient} />
+
+                    <PatientActionMenu
+                      patient={patient}
+                      activeMenu={activeMenu}
+                      onToggleMenu={toggleMenu}
+                      onView={handleViewDetails}
+                      onEdit={handleEditPatient}
+                      onDelete={handleDeleteClick}
+                      onAddAppointment={handleAddAppointmentModal}
+                      onRecover={handleRecoverPatient}
+                      canModifyPatients={canModifyPatients}
+                    />
                   </div>
+
                   <div className="space-y-1 mt-2">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Phone size={14} className="text-gray-400" />
-                      <span className={isDisabled ? 'text-gray-400' : ''}>{patient.mobileNumber}</span>
+                      <span className={isDisabled ? 'text-gray-400' : ''}>
+                        {patient.mobileNumber}
+                      </span>
                     </div>
                     {patient.email && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -614,31 +701,40 @@ const HospitalPatientsList = () => {
                     {patient.gender && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <User size={14} className="text-gray-400" />
-                        <span className={isDisabled ? 'text-gray-400' : ''}>{patient.gender}, {patient.age || 'N/A'} years</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>
+                          {patient.gender}, {patient.age || 'N/A'} years
+                        </span>
                       </div>
                     )}
                     {patient.bloodGroup && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Droplet size={14} className="text-gray-400" />
-                        <span className={isDisabled ? 'text-gray-400' : ''}>Blood Group: {patient.bloodGroup}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>
+                          Blood Group: {patient.bloodGroup}
+                        </span>
                       </div>
                     )}
                     {patient.patientType && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Calendar size={14} className="text-gray-400" />
-                        <span className={isDisabled ? 'text-gray-400' : ''}>Type: {patient.patientType}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>
+                          Type: {patient.patientType}
+                        </span>
                       </div>
                     )}
                     {patient.addressLine && (
                       <div className="flex items-start gap-2 text-sm text-gray-600">
                         <MapPin size={14} className="text-gray-400 mt-0.5" />
-                        <span className={isDisabled ? 'text-gray-400' : ''}>{patient.addressLine}</span>
+                        <span className={isDisabled ? 'text-gray-400' : ''}>
+                          {patient.addressLine}
+                        </span>
                       </div>
                     )}
                   </div>
+
                   {isDeleted && canModifyPatients && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
-                      <button 
+                      <button
                         onClick={() => handleRecoverPatient(patient)}
                         className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
                       >
@@ -646,6 +742,7 @@ const HospitalPatientsList = () => {
                       </button>
                     </div>
                   )}
+
                   {isInactive && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <div className="w-full flex items-center justify-center px-3 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium cursor-not-allowed">
@@ -653,9 +750,10 @@ const HospitalPatientsList = () => {
                       </div>
                     </div>
                   )}
+
                   {!isDeleted && !isInactive && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
-                      <button 
+                      <button
                         onClick={() => handleAddAppointmentModal(patient)}
                         className="w-full flex items-center justify-center gap-2 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors text-sm font-medium"
                       >
@@ -679,7 +777,7 @@ const HospitalPatientsList = () => {
         </div>
       )}
 
-      {/* Pagination Component - Simplified with < Prev 1 Next > */}
+      {/* Pagination */}
       <Pagination
         currentPage={currentPage}
         totalPages={totalPages}
@@ -692,12 +790,12 @@ const HospitalPatientsList = () => {
       {/* Modals */}
       {showAppointmentModal && (
         <AddAppointmentModal
-  isOpen={showAppointmentModal}
-  patient={appointmentPatient}
-  hospitalId={Number(hospitalId)}
-  onClose={() => setShowAppointmentModal(false)}
-  onProceedApprove={handleProceedApprove}
-/>
+          isOpen={showAppointmentModal}
+          patient={appointmentPatient}
+          hospitalId={Number(hospitalId)}
+          onClose={() => setShowAppointmentModal(false)}
+          onProceedApprove={handleProceedApprove}
+        />
       )}
 
       {showApproveModal && bookingData && (

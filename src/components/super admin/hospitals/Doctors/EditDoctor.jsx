@@ -1,37 +1,50 @@
-// src/components/Doctor/EditDoctor.jsx - Fixed route parameter reading
+// src/components/Doctor/EditDoctor.jsx - Super Admin version with pincode API integration
 import React, { useState, useEffect, useRef, Suspense, lazy, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { 
-  User, Mail, Phone, Calendar, MapPin, Lock, Image, 
+import {
+  User, Mail, Phone, Calendar, MapPin, Lock, Image,
   DollarSign, IdCard, AlertCircle, ArrowLeft, Upload, X, GraduationCap,
-  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield
+  Building, Clock, Sun, Moon, Home, Video, CheckCircle, XCircle, ChevronDown, Eye, EyeOff, Briefcase, Users, Power, Shield, CreditCard
 } from 'lucide-react';
-import { 
-  Button, Input, Select, Textarea, Card, Alert, Loader 
+import {
+  Button, Input, Select, Textarea, Card, Alert, Loader
 } from '../../../ui';
+import CustomSelect from '../../../ui/CustomSelect';
+import DatePicker from '../../../ui/DatePicker';
 import { showUpdateToast, showErrorToast, showWarningToast, showSuccessToast } from '../../../ui/Toast';
 import {
   useGetDoctorByIdQuery,
   useUpdateDoctorMutation,
-  useGetSpecialitiesQuery
+  useGetSpecialitiesQuery,
+  useChangeDoctorPasswordMutation
 } from "../../../../../app/service/doctorApi";
 import { useAssignPermissionsMutation } from '../../../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../../../app/service/role';
 import { getHospitalId, getAuthUser } from '../../../../utils/auth';
-import { Country, State, City } from 'country-state-city';
-import { uploadToS3 } from '../../../../../app/service/S3';
+import { useGetPincodeQuery } from '../../../../../app/service/pincodeApi';
+import { uploadToS3, getS3ImageUrl } from '../../../../../app/service/S3';
 
-// Helper to get full image URL with cache-busting.
-// NOTE: The backend now returns the full image URL, so no S3_BASE_URL is needed.
-const getFullImageUrl = (imageKey) => {
-  if (!imageKey) return null;
+const GENDER_OPTIONS = [
+  { value: 'Male', label: 'Male' },
+  { value: 'Female', label: 'Female' },
+  { value: 'Other', label: 'Other' }
+];
 
-  // Add a cache-buster so newly edited/uploaded images refresh.
-  const separator = imageKey.includes('?') ? '&' : '?';
-  return `${imageKey}${separator}t=${Date.now()}`;
+const getAuthId = () => {
+  const authUser = getAuthUser();
+  return authUser?.id || authUser?.userId || authUser?._id || null;
 };
 
-// Lazy Image Component with Intersection Observer - FIXED with cache-busting
+const getFullImageUrl = async (imageKey) => {
+  if (!imageKey) return null;
+  if (
+    imageKey.startsWith("http://") ||
+    imageKey.startsWith("https://") ||
+    imageKey.startsWith("data:")
+  ) return imageKey;
+  return await getS3ImageUrl(imageKey);
+};
+
 const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) => {
   const [imageSrc, setImageSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,24 +55,27 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
       setIsLoading(false);
       return;
     }
-
+    let cancelled = false;
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            setImageSrc(getFullImageUrl(imageKey));
-            observer.disconnect();
+        entries.forEach(async (entry) => {
+          if (!entry.isIntersecting) return;
+          observer.disconnect();
+          try {
+            const url = await getFullImageUrl(imageKey);
+            if (!cancelled) setImageSrc(url);
+          } catch (e) {
+            console.error('image load failed', e);
+            if (!cancelled) setImageSrc(null);
+          } finally {
+            if (!cancelled) setIsLoading(false);
           }
         });
       },
       { rootMargin: '50px' }
     );
-
-    if (imgRef.current) {
-      observer.observe(imgRef.current);
-    }
-
-    return () => observer.disconnect();
+    if (imgRef.current) observer.observe(imgRef.current);
+    return () => { cancelled = true; observer.disconnect(); };
   }, [imageKey, refreshKey]);
 
   return (
@@ -77,14 +93,8 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
           src={imageSrc}
           alt="Profile"
           className="w-full h-full object-cover rounded-full"
-          onLoad={() => {
-            setIsLoading(false);
-            onLoad?.();
-          }}
-          onError={(e) => {
-            setIsLoading(false);
-            onError?.(e);
-          }}
+          onLoad={() => { setIsLoading(false); onLoad?.(); }}
+          onError={(e) => { setIsLoading(false); onError?.(e); }}
         />
       )}
       {!imageSrc && !isLoading && (
@@ -98,7 +108,6 @@ const LazyProfileImage = ({ imageKey, firstName, onLoad, onError, refreshKey }) 
   );
 };
 
-// Form Section Skeleton Loader
 const FormSectionSkeleton = () => (
   <div className="space-y-6 animate-pulse">
     <div className="h-8 w-40 bg-gray-200 rounded"></div>
@@ -113,7 +122,6 @@ const FormSectionSkeleton = () => (
   </div>
 );
 
-// Profile Section Skeleton
 const ProfileSectionSkeleton = () => (
   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg animate-pulse">
     <div className="w-24 h-24 bg-gray-200 rounded-full"></div>
@@ -125,13 +133,12 @@ const ProfileSectionSkeleton = () => (
   </div>
 );
 
-// SearchableDropdown Component with Lazy Loading
-const SearchableDropdownComponent = ({ 
-  label, 
-  options, 
-  value, 
-  onChange, 
-  placeholder, 
+const SearchableDropdownComponent = ({
+  label,
+  options,
+  value,
+  onChange,
+  placeholder,
   icon: Icon,
   disabled = false,
   required = false,
@@ -184,28 +191,22 @@ const SearchableDropdownComponent = ({
         <input
           type="text"
           value={isOpen ? searchTerm : displayValue()}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setIsOpen(true);
-          }}
-          onFocus={() => {
-            setIsOpen(true);
-            setSearchTerm("");
-          }}
+          onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+          onFocus={() => { setIsOpen(true); setSearchTerm(""); }}
           placeholder={isLoading ? "Loading departments..." : placeholder}
           disabled={disabled || isLoading}
           className={`w-full ${Icon ? 'pl-10' : 'pl-4'} pr-10 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
             (disabled || isLoading) ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
           }`}
         />
-        <ChevronDown 
+        <ChevronDown
           className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
             isOpen ? 'rotate-180' : ''
           }`}
           onClick={() => !isLoading && setIsOpen(!isOpen)}
         />
       </div>
-      
+
       {isOpen && !isLoading && filteredOptions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {filteredOptions.map((option, index) => (
@@ -220,7 +221,7 @@ const SearchableDropdownComponent = ({
           ))}
         </div>
       )}
-      
+
       {isOpen && !isLoading && filteredOptions.length === 0 && (
         <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
           No departments found
@@ -239,7 +240,103 @@ const SearchableDropdownComponent = ({
   );
 };
 
-// Day Schedule Row Component
+// Dropdown for pincode post-office selection
+const SearchablePostOfficeDropdown = ({
+  label,
+  options = [],
+  value,
+  onChange,
+  placeholder,
+  disabled = false,
+  required = false,
+  error = '',
+  touched = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const dropdownRef = useRef(null);
+
+  const getName = (option) => option?.Name || option?.name || '';
+
+  const filteredOptions = (options || []).filter(option =>
+    getName(option).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm("");
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(getName(option));
+    setSearchTerm("");
+    setIsOpen(false);
+  };
+
+  const showError = touched && error;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : (value || '')}
+          onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+          onFocus={() => { setIsOpen(true); setSearchTerm(""); }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+        />
+      </div>
+
+      {isOpen && !disabled && filteredOptions.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {filteredOptions.map((option, index) => (
+            <div
+              key={`${getName(option)}-${index}`}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{getName(option)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOpen && !disabled && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
+    </div>
+  );
+};
+
 const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   const [localSchedule, setLocalSchedule] = useState(schedule);
 
@@ -362,7 +459,6 @@ const DayScheduleRowComponent = React.memo(({ day, schedule, onUpdate }) => {
   );
 });
 
-// Centered Loader Component
 const CenteredLoader = ({ text = "Loading..." }) => (
   <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
     <div className="text-center">
@@ -372,15 +468,13 @@ const CenteredLoader = ({ text = "Loading..." }) => (
   </div>
 );
 
-// Status Toggle Component
 const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
   const isActive = status;
-
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
       <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
         <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
-          <Power className="h-5 w-5 text-blue-600" /> 
+          <Power className="h-5 w-5 text-blue-600" />
           Doctor Status
         </h3>
       </div>
@@ -391,8 +485,8 @@ const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
               {isActive ? 'Active' : 'Inactive'}
             </p>
             <p className="text-xs text-gray-500 mt-0.5">
-              {isActive 
-                ? 'Doctor is currently active and can receive appointments' 
+              {isActive
+                ? 'Doctor is currently active and can receive appointments'
                 : 'Doctor is inactive and will not appear in search results'}
             </p>
           </div>
@@ -422,49 +516,51 @@ const StatusToggle = React.memo(({ status, onToggle, disabled }) => {
 const EditDoctor = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // ✅ FIXED: Read both parameters from the route
-  // Route: /super-admin/hospitals/:id/doctors/edit/:doctorId
+
+  // ✅ Super admin route: /super-admin/hospitals/:id/doctors/edit/:doctorId
   const { id: hospitalIdFromUrl, doctorId: doctorIdFromUrl } = useParams();
-  
-  // Use the doctor ID from URL params directly (no cleaning needed as it's a string)
-  const doctorId = doctorIdFromUrl || '';
-  
-  // Get hospitalId from location state (passed from HospitalDoctorsList)
+
+  // Clean the doctor ID (strip any non-numeric characters)
+  const doctorId = doctorIdFromUrl ? doctorIdFromUrl.replace(/[^0-9]/g, '') : '';
+
+  // Hospital ID resolution: state → URL param → auth
   const hospitalIdFromState = location.state?.hospitalId;
-  const returnPath = location.state?.returnPath;
-  
-  // Get hospital ID from auth as fallback
   const hospitalIdFromAuth = getHospitalId();
   const hospitalId = hospitalIdFromState || hospitalIdFromUrl || hospitalIdFromAuth;
-  
-  // Get auth user for hospital name
+
   const authUser = getAuthUser();
+  const authId = getAuthId();
   const hospitalName = authUser?.name || '';
-  
-  // Role assignment state
+
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
-  // Fetch roles from API
+
   const {
     data: rolesData,
     isLoading: rolesLoading,
   } = useGetRolesQuery({
-    hospitalId,
+    hospitalId: hospitalId || undefined,
     limit: 100
+  }, {
+    skip: !hospitalId
   });
-  
-  // Extract roles from response - include admin role (id=2) and hospital-specific roles
-  const rolesList = [
+
+  const rolesList = useMemo(() => [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
-  ];
-  
-  // Fetch specialities from backend for department dropdown
+  ], [rolesData, hospitalId]);
+
+  const roleOptions = useMemo(
+    () =>
+      rolesList.map(role => ({
+        value: String(role.id),
+        label: role.name || role.roleName || 'Unnamed role'
+      })),
+    [rolesList]
+  );
+
   const { data: specialitiesData, isLoading: isLoadingSpecialities } = useGetSpecialitiesQuery();
-  
-  // Transform specialities to department options
-  const departmentOptions = React.useMemo(() => {
+
+  const departmentOptions = useMemo(() => {
     const rows = specialitiesData?.data || [];
     return rows.map((spec) => ({
       id: spec.id,
@@ -473,7 +569,7 @@ const EditDoctor = () => {
       label: spec.name.toUpperCase()
     }));
   }, [specialitiesData]);
-  
+
   const [uploadProgress, setUploadProgress] = useState(0);
   const [activeTab, setActiveTab] = useState('basic');
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
@@ -484,8 +580,9 @@ const EditDoctor = () => {
   const [formInitialized, setFormInitialized] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
-  
-  // Form state
+
+  const [changeDoctorPassword] = useChangeDoctorPasswordMutation();
+
   const [formData, setFormData] = useState({
     profileImage: null,
     imageUrl: null,
@@ -503,11 +600,10 @@ const EditDoctor = () => {
     registrationNumber: '',
     knownLanguages: [],
     about: '',
-    countryCode: '',
-    countryName: '',
-    stateCode: '',
+    countryName: 'India',
     stateName: '',
     district: '',
+    localArea: '',
     place: '',
     pincode: '',
     displayName: '',
@@ -527,20 +623,50 @@ const EditDoctor = () => {
   });
 
   const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
-  // ✅ FIXED: Use the correct doctorId from URL params
   const { data: doctorResponse, isLoading, error, refetch } = useGetDoctorByIdQuery(doctorId, {
     skip: !doctorId
   });
-  
+
   const [updateDoctor] = useUpdateDoctorMutation();
 
-  // Extract doctor from response
   const doctor = doctorResponse?.data?.doctor || doctorResponse?.doctor || doctorResponse?.data || doctorResponse;
 
-  const countries = Country.getAllCountries();
-  const [availableStates, setAvailableStates] = useState([]);
-  const [availableCities, setAvailableCities] = useState([]);
+  // Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(formData.pincode, {
+    skip: !/^\d{6}$/.test(formData.pincode),
+  });
+
+  const postOffices =
+    pincodeData?.[0]?.Status === "Success"
+      ? pincodeData[0].PostOffice || []
+      : [];
+
+  // Auto-populate state and district when pincode data arrives
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+      setFormData(prev => ({
+        ...prev,
+        stateName: firstOffice.State,
+        district: firstOffice.District,
+        localArea: '' // reset so user picks one
+      }));
+    } else if (formData.pincode.length === 6 && pincodeData) {
+      setFormData(prev => ({
+        ...prev,
+        stateName: '',
+        district: '',
+        localArea: ''
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
 
   const languageOptions = [
     { value: 'mal', label: 'Malayalam' },
@@ -583,13 +709,11 @@ const EditDoctor = () => {
     };
   };
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
     const roleName = getRoleNameById(roleId);
     const roleNameLower = roleName?.toLowerCase();
@@ -599,124 +723,16 @@ const EditDoctor = () => {
     return 'bg-gray-100 text-gray-700';
   };
 
-  // Initialize form with doctor data
   useEffect(() => {
-    if (doctor && doctor.id && !formInitialized) {
-      // Get image key from doctor
-      const imageKey = 
-        doctor?.imageUrl ||
-        doctor?.profileImage ||
-        doctor?.image ||
-        null;
-      
-      // Find country and state
-      const country = countries.find(c => 
-        c.name?.toLowerCase() === doctor.address?.country?.toLowerCase()
-      );
-      
-      const stateList = State.getStatesOfCountry(country?.isoCode || '');
-      const state = stateList.find(s => 
-        s.name?.toLowerCase() === doctor.address?.state?.toLowerCase()
-      );
-      
-      // Build schedule from consulting data
-      const schedule = getDefaultSchedule();
-      
-      // Update schedule with consultingOne data
-      if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
-        doctor.consultingOne.forEach(item => {
-          const dayKey = item.day?.toLowerCase();
-          if (schedule[dayKey]) {
-            schedule[dayKey] = {
-              ...schedule[dayKey],
-              isHoliday: item.is_holiday || false,
-              hasBreak: false,
-              morningOpen: item.opening_time || schedule[dayKey].morningOpen,
-              morningClose: item.closing_time || schedule[dayKey].morningClose,
-            };
-          }
-        });
-      }
-      
-      // Update schedule with consultingTwo data
-      if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
-        doctor.consultingTwo.forEach(item => {
-          const dayKey = item.day?.toLowerCase();
-          if (schedule[dayKey]) {
-            schedule[dayKey] = {
-              ...schedule[dayKey],
-              isHoliday: item.is_holiday || false,
-              hasBreak: item.has_break || true,
-              morningOpen: item.morning_session?.open || schedule[dayKey].morningOpen,
-              morningClose: item.morning_session?.close || schedule[dayKey].morningClose,
-              eveningOpen: item.evening_session?.open || schedule[dayKey].eveningOpen,
-              eveningClose: item.evening_session?.close || schedule[dayKey].eveningClose,
-            };
-          }
-        });
-      }
-      
-      const newFormData = {
-        profileImage: imageKey,
-        imageUrl: imageKey,
-        imageKey: imageKey,
-        firstName: doctor.firstName || "",
-        lastName: doctor.lastName || "",
-        department: doctor.department?.toUpperCase() || "",
-        specialist: doctor.specialist || "",
-        qualification: doctor.qualification || "",
-        fees: doctor.fees || "",
-        phoneNumber: doctor.phone || "",
-        email: doctor.email || "",
-        dob: doctor.dob ? new Date(doctor.dob).toISOString().split('T')[0] : "",
-        gender: doctor.gender ? doctor.gender.charAt(0).toUpperCase() + doctor.gender.slice(1) : "",
-        registrationNumber: doctor.regNo || doctor.registrationNumber || "",
-        knownLanguages: doctor.knowLanguages || [],
-        about: doctor.about || "",
-        place: doctor.address?.place || "",
-        countryCode: country?.isoCode || '',
-        countryName: doctor.address?.country || "",
-        stateCode: state?.isoCode || '',
-        stateName: doctor.address?.state || "",
-        district: doctor.address?.district || "",
-        pincode: doctor.address?.pincode || "",
-        displayName: doctor.displayName || "",
-        userName: doctor.userName || "",
-        password: "",
-        confirmPassword: "",
-        joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
-        experience: doctor.experience || "",
-        appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
-        roleId: doctor.roleId || "",
-        weeklySchedule: schedule,
-        outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
-        outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
-        outDoorConsultingPlace: doctor.outDoorConsulting?.place || "",
-        bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true,
-        isActive: doctor.isActive ?? true
-      };
-      
-      setFormData(newFormData);
-      
-      if (imageKey) {
-        setPreviewImage(getFullImageUrl(imageKey));
-        setImageRefreshKey(Date.now());
-      }
-      
-      if (country?.isoCode) {
-        setAvailableStates(State.getStatesOfCountry(country.isoCode));
-        if (state?.isoCode) {
-          setAvailableCities(City.getCitiesOfState(country.isoCode, state.isoCode));
-        }
-      }
-      
-      setFormInitialized(true);
+    if (!hospitalId) {
+      console.warn('⚠️ No hospital ID found. Please log in again.');
     }
-  }, [doctor, formInitialized, countries]);
+  }, [hospitalId]);
 
-  // Reset form initialization when doctor ID changes
+  // Reset form when doctor ID changes
   useEffect(() => {
     setFormInitialized(false);
+
     setFormData({
       profileImage: null,
       imageUrl: null,
@@ -734,11 +750,10 @@ const EditDoctor = () => {
       registrationNumber: '',
       knownLanguages: [],
       about: '',
-      countryCode: '',
-      countryName: '',
-      stateCode: '',
+      countryName: 'India',
       stateName: '',
       district: '',
+      localArea: '',
       place: '',
       pincode: '',
       displayName: '',
@@ -756,10 +771,128 @@ const EditDoctor = () => {
       bookingOpen: true,
       isActive: true
     });
+
     setPreviewImage(null);
     setImageLoaded(false);
     setImageRefreshKey(Date.now());
+    setErrors({});
+    setTouched({});
+
+    if (doctorId) {
+      refetch();
+    }
+
+    return () => {
+      setFormInitialized(false);
+    };
   }, [doctorId]);
+
+  // Initialize form with doctor data
+  useEffect(() => {
+    if (doctor && doctor.id && !formInitialized) {
+      const imageKey =
+        doctor?.imageUrl ||
+        doctor?.profileImage ||
+        doctor?.image ||
+        null;
+
+      const schedule = getDefaultSchedule();
+
+      if (doctor.consultingOne && Array.isArray(doctor.consultingOne)) {
+        doctor.consultingOne.forEach(item => {
+          const dayKey = item.day?.toLowerCase();
+          if (schedule[dayKey]) {
+            schedule[dayKey] = {
+              ...schedule[dayKey],
+              isHoliday: item.is_holiday || false,
+              hasBreak: false,
+              morningOpen: item.opening_time || schedule[dayKey].morningOpen,
+              morningClose: item.closing_time || schedule[dayKey].morningClose,
+            };
+          }
+        });
+      }
+
+      if (doctor.consultingTwo && Array.isArray(doctor.consultingTwo)) {
+        doctor.consultingTwo.forEach(item => {
+          const dayKey = item.day?.toLowerCase();
+          if (schedule[dayKey]) {
+            schedule[dayKey] = {
+              ...schedule[dayKey],
+              isHoliday: item.is_holiday || false,
+              hasBreak: item.has_break ?? false,
+              morningOpen:
+                item.morning_session?.open || schedule[dayKey].morningOpen,
+              morningClose:
+                item.morning_session?.close || schedule[dayKey].morningClose,
+              eveningOpen:
+                item.evening_session?.open || schedule[dayKey].eveningOpen,
+              eveningClose:
+                item.evening_session?.close || schedule[dayKey].eveningClose,
+            };
+          }
+        });
+      }
+
+      const newFormData = {
+        profileImage: imageKey,
+        imageUrl: imageKey,
+        imageKey: imageKey,
+        firstName: doctor.firstName || "",
+        lastName: doctor.lastName || "",
+        department: doctor.department?.toUpperCase() || "",
+        specialist: doctor.specialist || "",
+        qualification: doctor.qualification || "",
+        fees: doctor.fees || "",
+        phoneNumber: doctor.phone || "",
+        email: doctor.email || "",
+        dob: doctor.dob ? new Date(doctor.dob).toISOString().split('T')[0] : "",
+        gender: doctor.gender ? doctor.gender.charAt(0).toUpperCase() + doctor.gender.slice(1) : "",
+        registrationNumber: doctor.regNo || doctor.registrationNumber || "",
+        knownLanguages: doctor.knowLanguages || [],
+        about: doctor.about || "",
+        // ✅ Pincode based address
+        countryName: doctor.address?.country || 'India',
+        stateName: doctor.address?.state || "",
+        district: doctor.address?.district || "",
+        localArea: doctor.address?.localArea || "",
+        place: doctor.address?.place || "",
+        pincode: doctor.address?.pincode ? String(doctor.address.pincode) : "",
+        displayName: doctor.displayName || "",
+        userName: doctor.userName || "",
+        password: "",
+        confirmPassword: "",
+        joiningDate: doctor.joiningDate ? new Date(doctor.joiningDate).toISOString().split('T')[0] : "",
+        experience: doctor.experience || "",
+        appointmentCount: doctor.appointmentCount || doctor.appoimentCount || "",
+        roleId: doctor.roleId != null ? String(doctor.roleId) : "",
+        weeklySchedule: schedule,
+        outDoorConsultingOpen: doctor.outDoorConsulting?.time?.open || "",
+        outDoorConsultingClose: doctor.outDoorConsulting?.time?.close || "",
+        outDoorConsultingPlace: doctor.outDoorConsulting?.place || "",
+        bookingOpen: doctor.bookingOpen !== undefined ? doctor.bookingOpen : true,
+        isActive: doctor.isActive ?? true
+      };
+
+      setFormData(newFormData);
+
+      if (imageKey) {
+        let cancelled = false;
+        getFullImageUrl(imageKey)
+          .then(url => {
+            if (cancelled) return;
+            setPreviewImage(url);
+            setImageRefreshKey(Date.now());
+          })
+          .catch(err => {
+            console.error('Failed to resolve preview image:', err);
+            if (!cancelled) setPreviewImage(null);
+          });
+      }
+
+      setFormInitialized(true);
+    }
+  }, [doctor, formInitialized]);
 
   const updateScheduleForDay = useCallback((day, newSchedule) => {
     setFormData(prev => ({
@@ -773,42 +906,42 @@ const EditDoctor = () => {
 
   const handleImageUpload = async (file) => {
     if (!file) return;
-    
+
     const imageError = validateImage(file);
     if (imageError) {
       setErrors(prev => ({ ...prev, profileImage: imageError }));
       showWarningToast(imageError, 3000);
       return;
     }
-    
+
     setErrors(prev => ({ ...prev, profileImage: '' }));
     setUploadProgress(10);
-    
+
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
-    
+
     try {
       setUploadProgress(30);
-      
+
       const uploaded = await uploadToS3(
-        file, 
+        file,
         formData.imageKey || null,
         Number(doctorId),
         "doctor"
       );
-      
+
       setUploadProgress(100);
-      
+
       setFormData(prev => ({
         ...prev,
         imageUrl: uploaded.key,
         profileImage: uploaded.key,
         imageKey: uploaded.key
       }));
-      
+
       setImageRefreshKey(Date.now());
-      
+
       setTimeout(() => setUploadProgress(0), 1000);
       showSuccessToast('Image uploaded successfully!', 3000);
     } catch (error) {
@@ -816,8 +949,11 @@ const EditDoctor = () => {
       setUploadProgress(0);
       setErrors(prev => ({ ...prev, profileImage: 'Failed to upload image. Please try again.' }));
       showErrorToast('Failed to upload image. Please try again.', 3000);
+
       if (formData.profileImage) {
-        setPreviewImage(getFullImageUrl(formData.profileImage));
+        getFullImageUrl(formData.profileImage)
+          .then(url => setPreviewImage(url))
+          .catch(() => setPreviewImage(null));
       } else {
         setPreviewImage(null);
       }
@@ -851,35 +987,30 @@ const EditDoctor = () => {
     showSuccessToast('Image removed', 2000);
   };
 
-  const handleCountryChange = useCallback((code, name) => {
+  // ✅ Pincode change handler
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, "").slice(0, 6);
     setFormData(prev => ({
       ...prev,
-      countryCode: String(code),
-      countryName: String(name),
-      stateCode: '',
+      pincode: cleaned,
       stateName: '',
-      district: ''
+      district: '',
+      localArea: ''
     }));
-    setAvailableStates(State.getStatesOfCountry(code));
-    setAvailableCities([]);
-  }, []);
+    setTouched(prev => ({ ...prev, pincode: true }));
+    if (errors.pincode) {
+      setErrors(prev => ({ ...prev, pincode: '' }));
+    }
+  };
 
-  const handleStateChange = useCallback((code, name) => {
-    setFormData(prev => ({
-      ...prev,
-      stateCode: String(code),
-      stateName: String(name),
-      district: ''
-    }));
-    setAvailableCities(City.getCitiesOfState(formData.countryCode, code));
-  }, [formData.countryCode]);
-
-  const handleCityChange = useCallback((value, name) => {
-    setFormData(prev => ({
-      ...prev,
-      district: String(name)
-    }));
-  }, []);
+  // ✅ Local area change handler
+  const handleLocalAreaChange = (name) => {
+    setFormData(prev => ({ ...prev, localArea: name }));
+    setTouched(prev => ({ ...prev, localArea: true }));
+    if (errors.localArea) {
+      setErrors(prev => ({ ...prev, localArea: '' }));
+    }
+  };
 
   const handleLanguageSelect = useCallback((languageValue) => {
     setFormData(prev => {
@@ -931,25 +1062,25 @@ const EditDoctor = () => {
   const handleGoBack = () => {
     // Use the hospitalId from state, or from the route params
     // The route pattern is /super-admin/hospitals/:id/doctors/edit/:doctorId
-    
+
     // First, try to get hospitalId from location state
     if (hospitalIdFromState) {
       navigate(`/super-admin/hospitals/${hospitalIdFromState}/doctors`);
       return;
     }
-    
+
     // Use the hospital ID from URL params
     if (hospitalIdFromUrl) {
       navigate(`/super-admin/hospitals/${hospitalIdFromUrl}/doctors`);
       return;
     }
-    
+
     // Fallback: use the hospitalId from state or auth
     if (hospitalId) {
       navigate(`/super-admin/hospitals/${hospitalId}/doctors`);
       return;
     }
-    
+
     // Final fallback - go to main doctors list
     console.warn('⚠️ No hospital ID found, redirecting to main doctors list');
     navigate('/super-admin/doctors');
@@ -957,7 +1088,31 @@ const EditDoctor = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+
+    if (!/^\d{6}$/.test(formData.pincode)) {
+      showErrorToast('❌ Please enter a valid 6-digit pincode.');
+      setTouched(prev => ({ ...prev, pincode: true }));
+      setErrors(prev => ({ ...prev, pincode: 'Please enter a valid 6-digit pincode' }));
+      return;
+    }
+
+    if (postOffices.length > 0 && !formData.localArea) {
+      showErrorToast('❌ Please select a local area.');
+      setTouched(prev => ({ ...prev, localArea: true }));
+      setErrors(prev => ({ ...prev, localArea: 'Local area is required' }));
+      return;
+    }
+
+    if (formData.password && formData.password !== formData.confirmPassword) {
+      showErrorToast('❌ Passwords do not match!');
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -988,23 +1143,26 @@ const EditDoctor = () => {
         isActive: formData.isActive,
         roleId: roleId,
         hospitalName: hospitalName,
+        hospitalId: Number(hospitalId),
         address: {
           country: formData.countryName,
           state: formData.stateName,
           district: formData.district,
+          localArea: formData.localArea,
           place: formData.place,
           pincode: formData.pincode ? Number(formData.pincode) : null
         },
         consultingOne: Object.entries(formData.weeklySchedule)
-          .filter(([_, schedule]) => !schedule.isHoliday && !schedule.hasBreak)
+          .filter(([_, schedule]) => !schedule.hasBreak)
           .map(([day, schedule]) => ({
             day,
             opening_time: schedule.morningOpen,
             closing_time: schedule.morningClose,
-            is_holiday: false,
+            is_holiday: schedule.isHoliday,
           })),
+
         consultingTwo: Object.entries(formData.weeklySchedule)
-          .filter(([_, schedule]) => !schedule.isHoliday && schedule.hasBreak)
+          .filter(([_, schedule]) => schedule.hasBreak)
           .map(([day, schedule]) => ({
             day,
             morning_session: {
@@ -1015,7 +1173,7 @@ const EditDoctor = () => {
               open: schedule.eveningOpen,
               close: schedule.eveningClose,
             },
-            is_holiday: false,
+            is_holiday: schedule.isHoliday,
             has_break: true,
           })),
       };
@@ -1024,8 +1182,8 @@ const EditDoctor = () => {
         updatedDoctorData.appoimentCount = Number(formData.appointmentCount);
       }
 
-      if (formData.outDoorConsultingOpen && 
-          formData.outDoorConsultingClose && 
+      if (formData.outDoorConsultingOpen &&
+          formData.outDoorConsultingClose &&
           formData.outDoorConsultingPlace) {
         updatedDoctorData.outDoorConsulting = {
           time: {
@@ -1036,15 +1194,18 @@ const EditDoctor = () => {
         };
       }
 
-      if (formData.password) {
-        updatedDoctorData.password = formData.password;
-      }
-
-
       await updateDoctor({
         id: String(doctorId),
         updateDoctor: updatedDoctorData,
       }).unwrap();
+
+      if (formData.password) {
+        await changeDoctorPassword({
+          doctorId: String(doctorId),
+          newPassword: formData.password,
+          confirmPassword: formData.confirmPassword,
+        }).unwrap();
+      }
 
       if (roleId) {
         const payload = {
@@ -1058,7 +1219,7 @@ const EditDoctor = () => {
             }
           ]
         };
-        
+
         await assignPermissions(payload).unwrap();
       }
 
@@ -1074,7 +1235,22 @@ const EditDoctor = () => {
 
     } catch (error) {
       console.error("Update Error:", error);
-      showErrorToast(error.data?.message || "Failed to update doctor");
+
+      if (error.status === 409) {
+        showErrorToast('Email already exists! Please use a different email address.');
+      } else if (error.data?.error?.details?.length) {
+        const validationMessages = error.data.error.details
+          .map(detail => detail.message)
+          .filter(Boolean);
+
+        showErrorToast(`❌ ${validationMessages.join(', ')}`);
+      } else if (error.data?.error?.message) {
+        showErrorToast(`❌ ${error.data.error.message}`);
+      } else if (error.data?.message) {
+        showErrorToast(`❌ ${error.data.message}`);
+      } else {
+        showErrorToast("Failed to update doctor. Please try again.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1088,15 +1264,17 @@ const EditDoctor = () => {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
           <div className="bg-red-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
             <AlertCircle className="h-10 w-10 text-red-600" />
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mt-4">Error Loading Doctor</h2>
           <p className="text-gray-600 mt-2">There was an error loading the doctor data.</p>
-          <Button variant="primary" onClick={handleGoBack} className="mt-6">
-            Back to Doctors List
-          </Button>
+          <div className="flex items-center justify-center mt-6">
+            <Button variant="primary" onClick={handleGoBack}>
+              Back to Doctors List
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -1105,7 +1283,7 @@ const EditDoctor = () => {
   if (!doctor && !isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
           <div className="bg-yellow-100 rounded-full h-20 w-20 flex items-center justify-center mx-auto">
             <AlertCircle className="h-10 w-10 text-yellow-600" />
           </div>
@@ -1193,16 +1371,16 @@ const EditDoctor = () => {
                       <div className="relative">
                         <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                           {previewImage ? (
-                            <img 
+                            <img
                               key={imageRefreshKey}
-                              src={previewImage} 
-                              alt="Profile" 
+                              src={previewImage}
+                              alt="Profile"
                               className="w-full h-full object-cover rounded-full"
                               onLoad={() => setImageLoaded(true)}
                               onError={() => setImageLoaded(false)}
                             />
                           ) : (
-                            <LazyProfileImage 
+                            <LazyProfileImage
                               key={imageRefreshKey}
                               imageKey={formData.profileImage}
                               firstName={formData.firstName}
@@ -1213,9 +1391,9 @@ const EditDoctor = () => {
                           )}
                         </div>
                         {(previewImage || formData.profileImage) && (
-                          <button 
-                            type="button" 
-                            onClick={removeImage} 
+                          <button
+                            type="button"
+                            onClick={removeImage}
                             className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm"
                           >
                             <X className="h-3 w-3" />
@@ -1254,43 +1432,43 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="First Name" 
-                      name="firstName" 
-                      icon={User} 
-                      placeholder="Enter first name" 
-                      value={formData.firstName} 
-                      onChange={(e) => handleFieldChange('firstName', e.target.value)} 
-                      required 
+                    <Input
+                      label="First Name"
+                      name="firstName"
+                      icon={User}
+                      placeholder="Enter first name"
+                      value={formData.firstName}
+                      onChange={(e) => handleFieldChange('firstName', e.target.value)}
+                      required
                     />
-                    <Input 
-                      label="Last Name" 
-                      name="lastName" 
-                      icon={User} 
-                      placeholder="Enter last name" 
-                      value={formData.lastName} 
-                      onChange={(e) => handleFieldChange('lastName', e.target.value)} 
-                      required 
+                    <Input
+                      label="Last Name"
+                      name="lastName"
+                      icon={User}
+                      placeholder="Enter last name"
+                      value={formData.lastName}
+                      onChange={(e) => handleFieldChange('lastName', e.target.value)}
+                      required
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Joining Date" 
-                      name="joiningDate" 
-                      type="date" 
-                      icon={Calendar} 
-                      value={formData.joiningDate} 
-                      onChange={(e) => handleFieldChange('joiningDate', e.target.value)} 
+                    <Input
+                      label="Joining Date"
+                      name="joiningDate"
+                      type="date"
+                      icon={Calendar}
+                      value={formData.joiningDate}
+                      onChange={(e) => handleFieldChange('joiningDate', e.target.value)}
                     />
-                    <Input 
-                      label="Experience (years)" 
-                      name="experience" 
-                      icon={Briefcase} 
-                      placeholder="e.g., 5" 
-                      value={formData.experience} 
-                      onChange={(e) => handleFieldChange('experience', e.target.value)} 
-                      required 
+                    <Input
+                      label="Experience (years)"
+                      name="experience"
+                      icon={Briefcase}
+                      placeholder="e.g., 5"
+                      value={formData.experience}
+                      onChange={(e) => handleFieldChange('experience', e.target.value)}
+                      required
                     />
                   </div>
 
@@ -1312,14 +1490,14 @@ const EditDoctor = () => {
                       getOptionValue={(option) => option.value}
                       optionKey={(option) => option.id}
                     />
-                    
-                    <Input 
-                      label="Specialist" 
-                      name="specialist" 
-                      icon={IdCard} 
-                      placeholder="e.g., Cardiologist (Optional)" 
-                      value={formData.specialist} 
-                      onChange={(e) => handleFieldChange('specialist', e.target.value)} 
+
+                    <Input
+                      label="Specialist"
+                      name="specialist"
+                      icon={IdCard}
+                      placeholder="e.g., Cardiologist (Optional)"
+                      value={formData.specialist}
+                      onChange={(e) => handleFieldChange('specialist', e.target.value)}
                     />
                   </div>
 
@@ -1353,78 +1531,78 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Qualification" 
-                      name="qualification" 
-                      icon={GraduationCap} 
-                      placeholder="e.g., MBBS, MD" 
-                      value={formData.qualification} 
-                      onChange={(e) => handleFieldChange('qualification', e.target.value)} 
-                      required 
+                    <Input
+                      label="Qualification"
+                      name="qualification"
+                      icon={GraduationCap}
+                      placeholder="e.g., MBBS, MD"
+                      value={formData.qualification}
+                      onChange={(e) => handleFieldChange('qualification', e.target.value)}
+                      required
                     />
-                    <Input 
-                      label="Fees ($)" 
-                      name="fees" 
-                      type="number" 
-                      icon={DollarSign} 
-                      placeholder="0.00" 
-                      value={formData.fees} 
-                      onChange={(e) => handleFieldChange('fees', e.target.value)} 
-                      required 
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Phone Number" 
-                      name="phoneNumber" 
-                      icon={Phone} 
-                      placeholder="+1 234 567 8900" 
-                      value={formData.phoneNumber} 
-                      onChange={(e) => handleFieldChange('phoneNumber', e.target.value)} 
-                      required 
-                    />
-                    <Input 
-                      label="Email Address" 
-                      name="email" 
-                      type="email" 
-                      icon={Mail} 
-                      placeholder="doctor@example.com" 
-                      value={formData.email} 
-                      onChange={(e) => handleFieldChange('email', e.target.value)} 
-                      required 
+                    <Input
+                      label="Fees ($)"
+                      name="fees"
+                      type="number"
+                      icon={DollarSign}
+                      placeholder="0.00"
+                      value={formData.fees}
+                      onChange={(e) => handleFieldChange('fees', e.target.value)}
+                      required
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Date of Birth" 
-                      name="dob" 
-                      type="date" 
-                      icon={Calendar} 
-                      value={formData.dob} 
-                      onChange={(e) => handleFieldChange('dob', e.target.value)} 
-                      required 
+                    <Input
+                      label="Phone Number"
+                      name="phoneNumber"
+                      icon={Phone}
+                      placeholder="+1 234 567 8900"
+                      value={formData.phoneNumber}
+                      onChange={(e) => handleFieldChange('phoneNumber', e.target.value)}
+                      required
                     />
-                    <Select 
-                      label="Gender" 
-                      name="gender" 
-                      options={['Male', 'Female', 'Other']} 
-                      placeholder="Select Gender" 
-                      value={formData.gender} 
-                      onChange={(value) => handleFieldChange('gender', value)} 
-                      required 
+                    <Input
+                      label="Email Address"
+                      name="email"
+                      type="email"
+                      icon={Mail}
+                      placeholder="doctor@example.com"
+                      value={formData.email}
+                      onChange={(e) => handleFieldChange('email', e.target.value)}
+                      required
                     />
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <Input 
-                      label="Registration Number" 
-                      name="registrationNumber" 
-                      icon={IdCard} 
-                      placeholder="Medical license number" 
-                      value={formData.registrationNumber} 
-                      onChange={(e) => handleFieldChange('registrationNumber', e.target.value)} 
+                    <Input
+                      label="Date of Birth"
+                      name="dob"
+                      type="date"
+                      icon={Calendar}
+                      value={formData.dob}
+                      onChange={(e) => handleFieldChange('dob', e.target.value)}
+                      required
+                    />
+                    <Select
+                      label="Gender"
+                      name="gender"
+                      options={['Male', 'Female', 'Other']}
+                      placeholder="Select Gender"
+                      value={formData.gender}
+                      onChange={(value) => handleFieldChange('gender', value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Input
+                      label="Registration Number"
+                      name="registrationNumber"
+                      icon={IdCard}
+                      placeholder="Medical license number"
+                      value={formData.registrationNumber}
+                      onChange={(e) => handleFieldChange('registrationNumber', e.target.value)}
                     />
                   </div>
 
@@ -1432,7 +1610,7 @@ const EditDoctor = () => {
                     <label className="block text-sm font-medium text-gray-700">
                       Known Languages <span className="text-red-500">*</span>
                     </label>
-                    
+
                     {formData.knownLanguages.length > 0 && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {formData.knownLanguages.map(lang => (
@@ -1445,7 +1623,7 @@ const EditDoctor = () => {
                         ))}
                       </div>
                     )}
-                    
+
                     <div className="relative">
                       <button
                         type="button"
@@ -1457,7 +1635,7 @@ const EditDoctor = () => {
                         </span>
                         <ChevronDown className={`h-4 w-4 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       {isLanguageDropdownOpen && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setIsLanguageDropdownOpen(false)} />
@@ -1479,66 +1657,89 @@ const EditDoctor = () => {
                     </div>
                   </div>
 
-                  <Textarea 
-                    label="About" 
-                    name="about" 
-                    rows={3} 
-                    placeholder="Write a brief description..." 
-                    value={formData.about} 
-                    onChange={(e) => handleFieldChange('about', e.target.value)} 
+                  <Textarea
+                    label="About"
+                    name="about"
+                    rows={3}
+                    placeholder="Write a brief description..."
+                    value={formData.about}
+                    onChange={(e) => handleFieldChange('about', e.target.value)}
                   />
 
+                  {/* ✅ Pincode-based Address Section */}
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
                     <div className="space-y-5">
-                      <SearchableDropdownComponent
-                        label="Country"
-                        options={countries}
-                        value={formData.countryCode}
-                        onChange={handleCountryChange}
-                        placeholder="Search for a country..."
-                        icon={MapPin}
-                        required={true}
-                      />
-                      
-                      <SearchableDropdownComponent
-                        label="State"
-                        options={availableStates}
-                        value={formData.stateCode}
-                        onChange={handleStateChange}
-                        placeholder="Search for a state..."
-                        icon={MapPin}
-                        disabled={!formData.countryCode}
-                        required={true}
-                      />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Pincode <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                          <input
+                            type="text"
+                            value={formData.pincode}
+                            onChange={(e) => handlePincodeChange(e.target.value)}
+                            maxLength={6}
+                            placeholder="Enter 6-digit pincode"
+                            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                              touched.pincode && errors.pincode ? 'border-red-500' : 'border-gray-300'
+                            }`}
+                          />
+                        </div>
+                        {touched.pincode && errors.pincode && (
+                          <p className="text-sm text-red-600 mt-1">{errors.pincode}</p>
+                        )}
+                        {isPincodeLoading && (
+                          <p className="text-sm text-gray-500 mt-1">Fetching location details...</p>
+                        )}
+                        {isPincodeError && formData.pincode.length === 6 && (
+                          <p className="text-sm text-red-600 mt-1">Could not fetch pincode details. Please try again.</p>
+                        )}
+                      </div>
 
-                      <SearchableDropdownComponent
-                        label="District"
-                        options={availableCities}
-                        value={formData.district}
-                        onChange={handleCityChange}
-                        placeholder="Search for a district..."
-                        icon={MapPin}
-                        disabled={!formData.stateCode}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                          <input
+                            type="text"
+                            value={formData.stateName}
+                            readOnly
+                            placeholder="Auto-filled from pincode"
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                          <input
+                            type="text"
+                            value={formData.district}
+                            readOnly
+                            placeholder="Auto-filled from pincode"
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700"
+                          />
+                        </div>
+                      </div>
+
+                      <SearchablePostOfficeDropdown
+                        label="Local Area / Post Office"
+                        options={postOffices}
+                        value={formData.localArea}
+                        onChange={handleLocalAreaChange}
+                        placeholder={formData.pincode.length === 6 ? "Select local area" : "Enter pincode first"}
+                        disabled={formData.pincode.length !== 6 || isPincodeLoading || postOffices.length === 0}
                         required={true}
-                        getOptionLabel={(option) => option.name}
-                        getOptionValue={(option) => option.name}
+                        error={errors.localArea}
+                        touched={touched.localArea}
                       />
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                        <Input 
-                          label="Place" 
-                          name="place" 
-                          placeholder="Place/Locality" 
-                          value={formData.place} 
-                          onChange={(e) => handleFieldChange('place', e.target.value)} 
-                        />
-                        <Input 
-                          label="Pincode" 
-                          name="pincode" 
-                          placeholder="Postal code" 
-                          value={formData.pincode} 
-                          onChange={(e) => handleFieldChange('pincode', e.target.value)} 
+                        <Input
+                          label="Place"
+                          name="place"
+                          placeholder="Place/Locality"
+                          value={formData.place}
+                          onChange={(e) => handleFieldChange('place', e.target.value)}
                         />
                       </div>
                     </div>
@@ -1547,39 +1748,39 @@ const EditDoctor = () => {
                   <div className="mt-6 pt-4 border-t border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                      <Input 
-                        label="Display Name" 
-                        name="displayName" 
-                        icon={User} 
-                        placeholder="How name appears on profile" 
-                        value={formData.displayName} 
-                        onChange={(e) => handleFieldChange('displayName', e.target.value)} 
+                      <Input
+                        label="Display Name"
+                        name="displayName"
+                        icon={User}
+                        placeholder="How name appears on profile"
+                        value={formData.displayName}
+                        onChange={(e) => handleFieldChange('displayName', e.target.value)}
                       />
-                      
+
                       <div className="relative">
-                        <Input 
-                          label="New Password" 
-                          name="password" 
-                          type={showPassword ? "text" : "password"} 
-                          icon={Lock} 
-                          placeholder="Leave blank to keep current" 
-                          value={formData.password} 
-                          onChange={(e) => handleFieldChange('password', e.target.value)} 
+                        <Input
+                          label="New Password"
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          icon={Lock}
+                          placeholder="Leave blank to keep current"
+                          value={formData.password}
+                          onChange={(e) => handleFieldChange('password', e.target.value)}
                         />
                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
                           {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                         </button>
                       </div>
-                      
+
                       <div className="relative">
-                        <Input 
-                          label="Confirm New Password" 
-                          name="confirmPassword" 
-                          type={showConfirmPassword ? "text" : "password"} 
-                          icon={Lock} 
-                          placeholder="Confirm new password" 
-                          value={formData.confirmPassword} 
-                          onChange={(e) => handleFieldChange('confirmPassword', e.target.value)} 
+                        <Input
+                          label="Confirm New Password"
+                          name="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          icon={Lock}
+                          placeholder="Confirm new password"
+                          value={formData.confirmPassword}
+                          onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
                         />
                         <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-9 text-gray-400 hover:text-gray-600">
                           {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -1589,8 +1790,8 @@ const EditDoctor = () => {
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-gray-200">
-                    <StatusToggle 
-                      status={formData.isActive} 
+                    <StatusToggle
+                      status={formData.isActive}
                       onToggle={toggleDoctorStatus}
                       disabled={isSubmitting}
                     />
@@ -1601,7 +1802,7 @@ const EditDoctor = () => {
               {activeTab === 'professional' && (
                 <div className="p-6 space-y-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Consulting Hours</h3>
-                  
+
                   <div className="space-y-4">
                     {weekDays.map((day) => (
                       <DayScheduleRowComponent
@@ -1616,41 +1817,41 @@ const EditDoctor = () => {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
                     <Home className="h-5 w-5" /> Out Door Consulting
                   </h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-gray-50 rounded-lg">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">Consulting Time</label>
                       <div className="grid grid-cols-2 gap-3">
-                        <Input 
-                          label="Open Time" 
-                          name="outDoorConsultingOpen" 
-                          type="time" 
-                          value={formData.outDoorConsultingOpen} 
-                          onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)} 
+                        <Input
+                          label="Open Time"
+                          name="outDoorConsultingOpen"
+                          type="time"
+                          value={formData.outDoorConsultingOpen}
+                          onChange={(e) => handleFieldChange('outDoorConsultingOpen', e.target.value)}
                         />
-                        <Input 
-                          label="Close Time" 
-                          name="outDoorConsultingClose" 
-                          type="time" 
-                          value={formData.outDoorConsultingClose} 
-                          onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)} 
+                        <Input
+                          label="Close Time"
+                          name="outDoorConsultingClose"
+                          type="time"
+                          value={formData.outDoorConsultingClose}
+                          onChange={(e) => handleFieldChange('outDoorConsultingClose', e.target.value)}
                         />
                       </div>
                     </div>
-                    <Input 
-                      label="Consulting Place" 
-                      name="outDoorConsultingPlace" 
-                      icon={MapPin} 
-                      placeholder="Enter consulting location" 
-                      value={formData.outDoorConsultingPlace} 
-                      onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)} 
+                    <Input
+                      label="Consulting Place"
+                      name="outDoorConsultingPlace"
+                      icon={MapPin}
+                      placeholder="Enter consulting location"
+                      value={formData.outDoorConsultingPlace}
+                      onChange={(e) => handleFieldChange('outDoorConsultingPlace', e.target.value)}
                     />
                   </div>
 
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2 mt-6">
                     <Video className="h-5 w-5" /> Booking Status
                   </h3>
-                  
+
                   <div className="p-4 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>

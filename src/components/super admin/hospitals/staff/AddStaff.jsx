@@ -1,68 +1,93 @@
-// src/components/staffs/AddStaff.jsx - WITH FIXED NAVIGATION & NO VALIDATION TOAST
-import { useState, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+// src/components/super-admin/hospitals/staff/AddStaff.jsx
+import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-  ChevronRight,
+  ArrowLeft,
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  MapPin,
+  Lock,
+  Image,
   Upload,
   X,
-  Image,
   Eye,
   EyeOff,
-  Lock,
   Shield,
-  ArrowLeft
+  Briefcase,
+  Users,
+  GraduationCap,
+  Home,
+  ChevronDown,
+  CheckCircle,
+  XCircle,
+  Clock,
+  CreditCard
 } from 'lucide-react';
 import {
   Button,
   Input,
-  Select,
-  Card,
-  Alert,
   Switch
 } from '../../../ui';
+import CustomSelect from '../../../ui/CustomSelect';
+import DatePicker from '../../../ui/DatePicker';
 import { showAddToast, showSuccessToast, showErrorToast, showWarningToast } from '../../../ui/Toast';
 import { useCreateStaffMutation } from '../../../../../app/service/staffApi';
 import { useAssignPermissionsMutation } from '../../../../../app/service/rolePermission';
 import { useGetRolesQuery } from '../../../../../app/service/role';
-import { getHospitalId, getAuthUser } from '../../../../utils/auth';
+// ✅ Pincode API integration (same as AddPatient/AddDoctor model)
+import { useGetPincodeQuery } from '../../../../../app/service/pincodeApi';
+import { getAuthUser } from '../../../../utils/auth';
 import { uploadToS3 } from '../../../../../app/service/S3';
 
 // Constants
 const TOAST_DURATION = 3000;
 const SUCCESS_DURATION = 4000;
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const GRID_CLASS = "grid grid-cols-1 md:grid-cols-2 gap-5";
 
-// Static arrays moved outside component
+// Static arrays
 const designations = ['Compounder', 'Nurse', 'Purchase Officer', 'Supervisor', 'Receptionist', 'Lab Assistant', 'Pharmacist', 'Doctor', 'Technician', 'Admin'];
-const jobTypes = ['Day Shift', 'Night Shift', 'Remote', 'Hybrid'];
+const jobTypes = ['Day Shift', 'Night Shift'];
 const staffTypes = ['Permanent', 'Contract', 'Temporary', 'Intern'];
 const genders = ['male', 'female', 'other'];
-const countries = ['India', 'United States', 'Canada', 'United Kingdom', 'Australia', 'Germany', 'France', 'Japan', 'Brazil', 'Mexico'];
-const states = ['Kerala', 'Maharashtra', 'Delhi', 'Karnataka', 'Tamil Nadu', 'California', 'Texas', 'New York', 'Florida', 'Illinois'];
-const districts = ['Malappuram', 'Kozhikode', 'Ernakulam', 'Thiruvananthapuram', 'Thrissur', 'Kannur', 'Kollam', 'Palakkad', 'Alappuzha', 'Kottayam'];
 const languages = ['English', 'Spanish', 'French', 'German', 'Chinese', 'Japanese', 'Arabic', 'Hindi', 'Bengali', 'Portuguese', 'Malayalam', 'Tamil', 'Telugu', 'Kannada'];
 
-// Helper functions moved outside component
+// Shift types that require start & end time
+const SHIFT_TYPES_WITH_TIME = ['Day Shift', 'Night Shift'];
+
+// ✅ Options for the Gender CustomSelect — capitalised labels, lowercase values
+const GENDER_SELECT_OPTIONS = genders.map(g => ({
+  value: g,
+  label: g.charAt(0).toUpperCase() + g.slice(1),
+}));
+
+// Styling override so CustomSelect matches the inputs
+const SELECT_FORM_CLASS =
+  "[&>button]:border-gray-300 [&>button]:rounded-lg [&>button]:focus:ring-2 [&>button]:focus:ring-[#1C62A0] [&>button]:focus:border-transparent";
+
+// Helper functions
 const removeUndefined = obj => {
   if (!obj) return obj;
   Object.keys(obj).forEach(key => {
-    if (obj[key] === undefined) {
-      delete obj[key];
-    }
+    if (obj[key] === undefined) delete obj[key];
   });
   return obj;
 };
 
+// ✅ place is saved as "line 1, line 2, local area"
+const buildPlace = (...parts) =>
+  parts
+    .map(part => part?.trim())
+    .filter(Boolean)
+    .join(', ');
+
+// Validation functions
 const validateName = (name) => {
   if (!name || name.trim() === '') return 'Full name is required';
   if (name.length < 2) return 'Name must be at least 2 characters';
   if (name.length > 50) return 'Name must be less than 50 characters';
-  return '';
-};
-
-const validatePhone = (phone) => {
-  if (!phone || phone.trim() === '') return 'Phone number is required';
-  const mobileRegex = /^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{3,5}[-\s\.]?[0-9]{4,6}$/;
-  if (!mobileRegex.test(phone)) return 'Please enter a valid phone number';
   return '';
 };
 
@@ -75,7 +100,12 @@ const validateEmail = (email) => {
 
 const validatePassword = password => {
   if (!password) return 'Password is required';
-  return password.length < 8 ? 'Password must be at least 8 characters' : '';
+  if (password.length < 8) return 'Password must be at least 8 characters';
+  if (!/[A-Z]/.test(password)) return 'Password must contain at least one uppercase letter';
+  if (!/[a-z]/.test(password)) return 'Password must contain at least one lowercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must contain at least one number';
+  if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) return 'Password must contain at least one special character';
+  return '';
 };
 
 const validateConfirmPassword = (confirmPassword, password) => {
@@ -85,7 +115,6 @@ const validateConfirmPassword = (confirmPassword, password) => {
 };
 
 const validateDesignation = designation => !designation ? 'Designation is required' : '';
-
 const validateRole = roleId => !roleId ? 'Please select a role' : '';
 
 const validateDob = (dob) => {
@@ -102,19 +131,14 @@ const validateDob = (dob) => {
 
 const validateImage = (file) => {
   if (!file) return '';
-  if (file.size > 5 * 1024 * 1024) {
-    return 'File size must be less than 5MB';
-  }
+  if (file.size > MAX_FILE_SIZE) return 'File size must be less than 5MB';
   const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-  if (!validTypes.includes(file.type)) {
-    return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
-  }
+  if (!validTypes.includes(file.type)) return 'Only JPEG, PNG, GIF, and WEBP files are allowed';
   return '';
 };
 
 const validators = {
   name: validateName,
-  phone: validatePhone,
   email: validateEmail,
   password: validatePassword,
   confirmPassword: validateConfirmPassword,
@@ -124,27 +148,118 @@ const validators = {
 };
 
 const validateField = (name, value, formData) => {
-  if (name === 'confirmPassword') {
-    return validateConfirmPassword(value, formData.password);
-  }
+  if (name === 'confirmPassword') return validateConfirmPassword(value, formData.password);
   return validators[name]?.(value) || '';
 };
 
-const buildPlace = (line1, line2) => `${line1} ${line2}`.trim();
-
-const PasswordInput = ({ 
-  label, 
-  name, 
-  value, 
-  onChange, 
-  onBlur, 
-  error, 
-  touched, 
-  showPassword, 
-  setShowPassword,
+// ✅ Searchable dropdown for local area (post offices)
+const SearchableCityDropdown = ({
+  label,
+  options,
+  value,
+  onChange,
   placeholder,
-  icon: Icon,
-  required
+  disabled = false,
+  required = false,
+  error = '',
+  touched = false
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = useRef(null);
+
+  const filteredOptions = options.filter(option =>
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (option) => {
+    onChange(option.name);
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  const showError = touched && error;
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <label className="block text-sm font-medium text-gray-700 mb-1">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <div className="relative">
+        <Home className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+        <input
+          type="text"
+          value={isOpen ? searchTerm : value}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearchTerm('');
+          }}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+            showError ? 'border-red-500' : 'border-gray-300'
+          } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent ${
+            disabled ? 'text-gray-400 bg-gray-50 cursor-not-allowed' : ''
+          }`}
+        />
+        <ChevronDown
+          className={`absolute right-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 cursor-pointer transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
+        />
+      </div>
+
+      {isOpen && filteredOptions.length > 0 && (
+        <div
+          className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto overscroll-contain"
+          onWheel={(e) => e.stopPropagation()}
+        >
+          {filteredOptions.map((option, index) => (
+            <div
+              key={index}
+              className="px-4 py-2 hover:bg-gray-50 cursor-pointer transition-colors flex items-center gap-2"
+              onClick={() => handleSelect(option)}
+            >
+              <Home className="h-4 w-4 text-gray-400" />
+              <span className="text-gray-700">{option.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isOpen && filteredOptions.length === 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-center text-gray-500">
+          No results found
+        </div>
+      )}
+
+      {showError && (
+        <p className="text-sm text-red-600 mt-1">{error}</p>
+      )}
+    </div>
+  );
+};
+
+// Password Input Component
+const PasswordInput = ({
+  label, name, value, onChange, onBlur, error, touched,
+  showPassword, setShowPassword, placeholder, icon: Icon, required
 }) => (
   <div>
     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -171,248 +286,325 @@ const PasswordInput = ({
         {showPassword ? <EyeOff className="h-5 w-5 text-gray-400" /> : <Eye className="h-5 w-5 text-gray-400" />}
       </button>
     </div>
-    {error && touched && (
-      <p className="mt-1 text-sm text-red-500">{error}</p>
+    {error && touched && <p className="mt-1 text-sm text-red-500">{error}</p>}
+    {name === 'password' && value && !error && (
+      <p className="text-xs text-green-600 mt-1">✓ Password is strong</p>
+    )}
+    {name === 'password' && (
+      <p className="text-xs text-gray-400 mt-1">
+        Password must contain: 8+ chars, uppercase, lowercase, number & special character
+      </p>
     )}
   </div>
 );
 
+// Shift Time Input Component
+const ShiftTimeInput = ({
+  shiftStartTime, shiftEndTime, onChange, errors, touched, onBlur
+}) => {
+  const getDurationDisplay = () => {
+    if (!shiftStartTime || !shiftEndTime) return null;
+    const [startH, startM] = shiftStartTime.split(':').map(Number);
+    const [endH, endM] = shiftEndTime.split(':').map(Number);
+    let startMinutes = startH * 60 + startM;
+    let endMinutes = endH * 60 + endM;
+    if (endMinutes <= startMinutes) endMinutes += 24 * 60;
+    const durationMinutes = endMinutes - startMinutes;
+    const hours = Math.floor(durationMinutes / 60);
+    const mins = durationMinutes % 60;
+    return `${hours}h ${mins}m`;
+  };
+
+  const duration = getDurationDisplay();
+  const isOvernight = shiftStartTime && shiftEndTime && shiftEndTime <= shiftStartTime;
+
+  return (
+    <div className={GRID_CLASS}>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Shift Start Time <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="time"
+            name="shiftStartTime"
+            value={shiftStartTime}
+            onChange={onChange}
+            onBlur={onBlur}
+            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+              errors.shiftStartTime && touched.shiftStartTime ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.shiftStartTime && touched.shiftStartTime && (
+          <p className="mt-1 text-xs text-red-500">{errors.shiftStartTime}</p>
+        )}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          Shift End Time <span className="text-red-500">*</span>
+        </label>
+        <div className="relative">
+          <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+          <input
+            type="time"
+            name="shiftEndTime"
+            value={shiftEndTime}
+            onChange={onChange}
+            onBlur={onBlur}
+            className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C62A0] ${
+              errors.shiftEndTime && touched.shiftEndTime ? 'border-red-500' : 'border-gray-300'
+            }`}
+          />
+        </div>
+        {errors.shiftEndTime && touched.shiftEndTime && (
+          <p className="mt-1 text-xs text-red-500">{errors.shiftEndTime}</p>
+        )}
+      </div>
+
+      {duration && (
+        <div className="md:col-span-2 flex items-center gap-2 flex-wrap -mt-2">
+          <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+            ⏱ Duration: {duration}
+          </span>
+          {isOvernight && (
+            <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+              🌙 Overnight Shift
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AddStaff = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Get hospitalId from location state (passed from HospitalStaffList)
+
+  // ✅ Hospital ID resolution: route → state → auth
+  const { id: hospitalIdFromRoute } = useParams();
   const hospitalIdFromState = location.state?.hospitalId;
-  
-  // Get hospital ID from auth as fallback
-  const hospitalIdFromAuth = getHospitalId();
-  const hospitalId = hospitalIdFromState || hospitalIdFromAuth;
-  
+
   const authUser = getAuthUser();
+  const hospitalIdFromAuth = authUser?.hospitalId || authUser?.id;
+
+  const hospitalId = Number(
+    hospitalIdFromRoute ||
+    hospitalIdFromState ||
+    hospitalIdFromAuth ||
+    localStorage.getItem('hospitalId')
+  );
+
   const hospitalName = authUser?.name || '';
-  
+
   const [createStaff, { isLoading: isApiLoading }] = useCreateStaffMutation();
-  const [errors, setErrors] = useState({});
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [previewImage, setPreviewImage] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [languagesInput, setLanguagesInput] = useState('');
-  
-  // Role assignment state
   const [assignPermissions, { isLoading: isAssigning }] = useAssignPermissionsMutation();
-  
-  // Fetch roles from API
-  const {
-    data: rolesData,
-    isLoading: rolesLoading,
-  } = useGetRolesQuery({
-    hospitalId,
-    limit: 100
-  });
-  
-  // Extract roles from response - include admin role (id=2) and hospital-specific roles
+
+  const { data: rolesData, isLoading: rolesLoading } = useGetRolesQuery(
+    { hospitalId, limit: 100 },
+    { skip: !hospitalId }
+  );
+
   const rolesList = [
     ...(rolesData?.admin || []).filter(role => role.id === 2),
     ...(rolesData?.data || []).filter(role => role.hospitalId === Number(hospitalId))
   ];
-  
+
+  // ✅ Options for the Assign Role CustomSelect — string values for strict ===
+  const roleOptions = rolesList.map(role => ({
+    value: String(role.id),
+    label: role.name || role.roleName || String(role.id),
+  }));
+
+  // Form state
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    phone: '',
-    designation: '',
-    roleId: '',
-    joiningDate: '',
-    jobType: '',
-    staffType: '',
-    dob: '',
-    gender: 'male',
-    knowLanguages: [],
-    qualification: '',
-    address: {
-      country: '',
-      state: '',
-      district: '',
-      place: '',
-      pincode: ''
-    },
-    addressLine1: '',
-    addressLine2: '',
-    status: 'active',
-    profileImage: null,
-    imageKey: '',
+    name: '', email: '', password: '', confirmPassword: '',
+    phone: '', designation: '', roleId: '', joiningDate: '',
+    jobType: '', staffType: '', dob: '', gender: 'male',
+    knowLanguages: [], qualification: '',
+    // ✅ Pincode-based address
+    countryName: 'India', stateName: '', district: '', localArea: '',
+    pincode: '',
+    addressLine1: '', addressLine2: '',
+    status: 'active', profileImage: null, imageKey: '',
+    shiftStartTime: '', shiftEndTime: '',
   });
 
-  // Helper functions for state updates
-  const updateFormData = (updates) => {
-    setFormData(prev => ({
-      ...prev,
-      ...updates
-    }));
-  };
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
+  const [previewImage, setPreviewImage] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
 
-  const clearFieldError = (field) => {
-    setErrors(prev => ({
-      ...prev,
-      [field]: ''
-    }));
-  };
+  // ✅ Pincode API integration
+  const {
+    currentData: pincodeData,
+    isFetching: isPincodeLoading,
+    isError: isPincodeError,
+  } = useGetPincodeQuery(formData.pincode, {
+    skip: !/^\d{6}$/.test(formData.pincode),
+  });
 
-  const resetSubmitState = () => {
-    setSubmitError('');
-    setErrors({});
-  };
+  const postOffices =
+    pincodeData?.[0]?.Status === 'Success'
+      ? pincodeData[0].PostOffice || []
+      : [];
 
-  // ✅ FIXED: Navigation to Hospital Staff List with proper route - NO TOAST
+  // ✅ Automatically populate state and district
+  useEffect(() => {
+    if (postOffices.length > 0) {
+      const firstOffice = postOffices[0];
+
+      setFormData(prev => ({
+        ...prev,
+        stateName: firstOffice.State,
+        district: firstOffice.District,
+        localArea: ''
+      }));
+    } else if (formData.pincode.length === 6 && pincodeData) {
+      setFormData(prev => ({
+        ...prev,
+        stateName: '',
+        district: '',
+        localArea: ''
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pincodeData]);
+
+  const requiresShiftTime = SHIFT_TYPES_WITH_TIME.includes(formData.jobType);
+
+  const updateFormData = (updates) => setFormData(prev => ({ ...prev, ...updates }));
+  const clearFieldError = (field) => setErrors(prev => ({ ...prev, [field]: '' }));
+
+  // ✅ Navigate back to hospital staff list
   const handleGoBack = () => {
-    if (hospitalId) {
-      // Navigate to hospital staff list - no toast validation
+    if (hospitalIdFromRoute) {
+      navigate(`/super-admin/hospitals/${hospitalIdFromRoute}/staff`);
+    } else if (hospitalId) {
       navigate(`/super-admin/hospitals/${hospitalId}/staff`);
     } else {
-      // Fallback to main staff list
       navigate('/staffs');
     }
   };
 
-  const handleApiError = (error) => {
-    if (error?.status === 401 || error?.originalStatus === 401) {
-      showErrorToast('Session expired. Please login again.', TOAST_DURATION);
-      setTimeout(() => {
-        window.location.href = '/sign-in';
-      }, 2000);
-      return;
-    }
-    
-    const errorMessage = error?.data?.message || error?.message || 'Failed to add staff';
-    
-    if (error?.data?.errors) {
-      const backendErrors = error.data.errors;
-      const formattedErrors = {};
-      Object.keys(backendErrors).forEach(key => {
-        formattedErrors[key] = backendErrors[key];
-      });
-      setErrors(prev => ({ ...prev, ...formattedErrors }));
-      showErrorToast('Please check the form for errors', SUCCESS_DURATION);
-    } else {
-      showErrorToast(errorMessage, SUCCESS_DURATION);
-    }
-    
-    setSubmitError(errorMessage);
-    setIsSubmitting(false);
+  // ✅ Handle pincode change
+  const handlePincodeChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 6);
+
+    setFormData(prev => ({
+      ...prev,
+      pincode: cleaned,
+      stateName: '',
+      district: '',
+      localArea: ''
+    }));
+
+    if (errors.pincode) clearFieldError('pincode');
   };
 
+  // ✅ Handle local area change
+  const handleLocalAreaChange = (name) => {
+    setFormData(prev => ({ ...prev, localArea: name }));
+    setTouched(prev => ({ ...prev, localArea: true }));
+    if (errors.localArea) clearFieldError('localArea');
+  };
+
+  // Form handlers
   const handleBlur = (e) => {
     const { name, value } = e.target;
+    setTouched(prev => ({ ...prev, [name]: true }));
     const error = validateField(name, value, formData);
     setErrors(prev => ({ ...prev, [name]: error }));
   };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
-    if (name.startsWith('address.')) {
-      const addressField = name.split('.')[1];
+
+    if (name === 'jobType' && !SHIFT_TYPES_WITH_TIME.includes(value)) {
       setFormData(prev => ({
         ...prev,
-        address: { ...prev.address, [addressField]: value }
+        jobType: value,
+        shiftStartTime: '',
+        shiftEndTime: ''
       }));
-    } else {
-      updateFormData({ [name]: type === 'checkbox' ? checked : value });
+      setErrors(prev => ({ ...prev, shiftStartTime: '', shiftEndTime: '' }));
+      setTouched(prev => ({ ...prev, shiftStartTime: false, shiftEndTime: false }));
+      return;
     }
-    
-    // If password changes, re-validate confirm password
+    updateFormData({ [name]: type === 'checkbox' ? checked : value });
+
     if (name === 'password' && formData.confirmPassword) {
       const confirmError = validateConfirmPassword(formData.confirmPassword, value);
       setErrors(prev => ({ ...prev, confirmPassword: confirmError }));
     }
-    
+
     if (errors[name]) clearFieldError(name);
-    if (submitError) setSubmitError('');
   };
 
-  const handleAddressLineChange = (e) => {
-    const { name, value } = e.target;
-    
-    setFormData(prev => {
-      const updatedData = {
-        ...prev,
-        [name]: value
-      };
-      
-      const combinedPlace = buildPlace(
-        name === 'addressLine1' ? value : prev.addressLine1,
-        name === 'addressLine2' ? value : prev.addressLine2
-      );
-      
-      updatedData.address = {
-        ...updatedData.address,
-        place: combinedPlace
-      };
-      
-      return updatedData;
-    });
+  const handleDateChange = (field, isoDate) => {
+    updateFormData({ [field]: isoDate });
+    setTouched(prev => ({ ...prev, [field]: true }));
+    const error = validateField(field, isoDate, { ...formData, [field]: isoDate });
+    setErrors(prev => ({ ...prev, [field]: error }));
   };
 
-  const handleStatusToggle = () => {
-    setFormData(prev => ({
-      ...prev,
-      status: prev.status === 'active' ? 'inactive' : 'active'
-    }));
-  };
-
-  const handleAddLanguage = () => {
-    const language = languagesInput.trim();
-    if (language && !formData.knowLanguages.includes(language)) {
-      setFormData(prev => ({
-        ...prev,
-        knowLanguages: [...prev.knowLanguages, language]
-      }));
-      setLanguagesInput('');
-    }
-  };
-
-  const handleRemoveLanguage = (language) => {
-    setFormData(prev => ({
-      ...prev,
-      knowLanguages: prev.knowLanguages.filter(l => l !== language)
-    }));
-  };
-
-  const handleImageUpload = async (file) => {
-    if (!file) return;
-
-    const imageError = validateImage(file);
-
-    if (imageError) {
-      clearFieldError('profileImage');
+  const handleShiftTimeBlur = (e) => {
+    const { name } = e.target;
+    setTouched(prev => ({ ...prev, [name]: true }));
+    if (!e.target.value) {
       setErrors(prev => ({
         ...prev,
-        profileImage: imageError
+        [name]: name === 'shiftStartTime' ? 'Shift start time is required' : 'Shift end time is required'
       }));
-      showWarningToast(imageError, TOAST_DURATION);
-      return;
+    } else {
+      setErrors(prev => ({ ...prev, [name]: '' }));
     }
+  };
 
-    clearFieldError('profileImage');
+  // Language handlers
+  const handleLanguageSelect = (languageValue) => {
+    setFormData(prev => ({
+      ...prev,
+      knowLanguages: prev.knowLanguages.includes(languageValue)
+        ? prev.knowLanguages.filter(lang => lang !== languageValue)
+        : [...prev.knowLanguages, languageValue]
+    }));
+  };
 
+  const removeLanguage = (languageValue) => {
+    setFormData(prev => ({
+      ...prev,
+      knowLanguages: prev.knowLanguages.filter(lang => lang !== languageValue)
+    }));
+  };
+
+  // Image handlers
+  const handleImageUpload = async (file) => {
+    if (!file) return false;
+    const imageError = validateImage(file);
+    if (imageError) {
+      setErrors(prev => ({ ...prev, profileImage: imageError }));
+      showWarningToast(imageError, TOAST_DURATION);
+      return false;
+    }
     const reader = new FileReader();
     reader.onloadend = () => setPreviewImage(reader.result);
     reader.readAsDataURL(file);
 
     try {
       const uploaded = await uploadToS3(file);
-      updateFormData({
-        profileImage: uploaded.key,
-        imageKey: uploaded.key
-      });
+      updateFormData({ profileImage: uploaded.key, imageKey: uploaded.key });
       showSuccessToast('Image uploaded successfully!', TOAST_DURATION);
+      return true;
     } catch {
       showErrorToast('Failed to upload image', TOAST_DURATION);
+      return false;
     }
   };
 
@@ -428,71 +620,98 @@ const AddStaff = () => {
     showSuccessToast('Image removed', TOAST_DURATION);
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    const requiredFields = ['name', 'phone', 'email', 'password', 'designation', 'roleId'];
-    requiredFields.forEach(field => {
-      const error = validateField(field, formData[field], formData);
-      if (error) newErrors[field] = error;
-    });
-    
-    // Validate confirm password
-    const confirmError = validateConfirmPassword(formData.confirmPassword, formData.password);
-    if (confirmError) newErrors.confirmPassword = confirmError;
-    
-    const dobError = validateDob(formData.dob);
-    if (dobError) newErrors.dob = dobError;
-    setErrors(newErrors);
-    
-    return Object.keys(newErrors).length === 0;
+  const handleStatusToggle = () => {
+    setFormData(prev => ({
+      ...prev,
+      status: prev.status === 'active' ? 'inactive' : 'active'
+    }));
   };
 
-  // Get role name by ID for display
   const getRoleNameById = (roleId) => {
     const role = rolesList.find(r => String(r.id) === String(roleId));
     return role?.name || role?.roleName || '';
   };
 
-  // Get role badge color by role name
   const getRoleBadgeColor = (roleId) => {
-    const roleName = getRoleNameById(roleId);
-    const roleNameLower = roleName?.toLowerCase();
-    if (roleNameLower === 'admin') return 'bg-purple-100 text-purple-800';
-    if (roleNameLower === 'doctor') return 'bg-blue-100 text-blue-800';
-    if (roleNameLower === 'staff') return 'bg-green-100 text-green-800';
+    const roleName = getRoleNameById(roleId)?.toLowerCase();
+    if (roleName === 'admin') return 'bg-purple-100 text-purple-800';
+    if (roleName === 'doctor') return 'bg-blue-100 text-blue-800';
+    if (roleName === 'staff') return 'bg-green-100 text-green-800';
     return 'bg-gray-100 text-gray-700';
   };
 
-  // Handle form submission - Create staff and assign role
-  const handleSubmit = async () => {
-    resetSubmitState();
-    
-    // ✅ REMOVED: Validation toast warning - just validate and show errors on form
-    if (!validateForm()) {
-      // Errors are already set in state via validateForm()
-      // Scroll to first error field
-      const firstErrorField = document.querySelector('.border-red-500');
-      if (firstErrorField) {
-        firstErrorField.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        firstErrorField.focus();
+  // Validation
+  const validateForm = () => {
+    const newErrors = {};
+    const requiredFields = ['name', 'email', 'password', 'designation', 'roleId'];
+    requiredFields.forEach(field => {
+      const error = validateField(field, formData[field], formData);
+      if (error) newErrors[field] = error;
+    });
+
+    const confirmError = validateConfirmPassword(formData.confirmPassword, formData.password);
+    if (confirmError) newErrors.confirmPassword = confirmError;
+
+    const dobError = validateDob(formData.dob);
+    if (dobError) newErrors.dob = dobError;
+
+    if (requiresShiftTime) {
+      if (!formData.shiftStartTime) newErrors.shiftStartTime = 'Shift start time is required';
+      if (!formData.shiftEndTime) newErrors.shiftEndTime = 'Shift end time is required';
+    }
+
+    // ✅ Address is optional, but if a pincode is given it must be complete
+    if (formData.pincode) {
+      if (!/^\d{6}$/.test(formData.pincode)) {
+        newErrors.pincode = 'Please enter a valid 6-digit pincode';
+      } else if (!formData.stateName || !formData.district) {
+        newErrors.pincode = 'Invalid pincode or no location found';
+      } else if (!formData.localArea) {
+        newErrors.localArea = 'Local area is required';
       }
+    }
+
+    setErrors(newErrors);
+    return newErrors;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!hospitalId) {
+      showErrorToast('❌ Hospital ID not found. Please log in again.');
+      return;
+    }
+
+    const touchedFields = {};
+    ['name', 'email', 'password', 'confirmPassword', 'designation', 'roleId', 'pincode', 'localArea'].forEach(field => {
+      touchedFields[field] = true;
+    });
+    if (requiresShiftTime) {
+      touchedFields.shiftStartTime = true;
+      touchedFields.shiftEndTime = true;
+    }
+    setTouched(touchedFields);
+
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      showWarningToast('Please fix the validation errors before submitting', TOAST_DURATION);
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      const combinedPlace = buildPlace(formData.addressLine1, formData.addressLine2);
+      const combinedPlace = buildPlace(formData.addressLine1, formData.addressLine2, formData.localArea);
       const isActive = formData.status === 'active';
       const roleId = Number(formData.roleId);
       const selectedRoleName = getRoleNameById(roleId);
-       
+
       const staffData = {
-        hospitalId: Number(hospitalId),
         name: formData.name,
         email: formData.email,
         password: formData.password,
-        roleId: Number(formData.roleId),
+        roleId: roleId,
         phone: formData.phone,
         designation: formData.designation,
         joiningDate: formData.joiningDate || undefined,
@@ -503,12 +722,15 @@ const AddStaff = () => {
         knowLanguages: formData.knowLanguages || [],
         qualification: formData.qualification || undefined,
         hospitalName: hospitalName,
+        hospitalId: hospitalId,
+        shiftStartTime: requiresShiftTime ? formData.shiftStartTime : undefined,
+        shiftEndTime: requiresShiftTime ? formData.shiftEndTime : undefined,
         address: {
-          country: formData.address.country || undefined,
-          state: formData.address.state || undefined,
-          district: formData.address.district || undefined,
-          place: combinedPlace || formData.address.place || undefined,
-          pincode: formData.address.pincode ? Number(formData.address.pincode) : undefined
+          country: formData.pincode ? 'India' : undefined,
+          state: formData.stateName || undefined,
+          district: formData.district || undefined,
+          place: combinedPlace || undefined,
+          pincode: formData.pincode ? Number(formData.pincode) : undefined
         },
         status: formData.status,
         profileImage: formData.profileImage || undefined,
@@ -516,31 +738,21 @@ const AddStaff = () => {
       };
 
       removeUndefined(staffData);
-      if (staffData.address) {
-        removeUndefined(staffData.address);
-      }
+      if (staffData.address) removeUndefined(staffData.address);
 
-      // Create staff
       const response = await createStaff(staffData).unwrap();
       const staff = response.data;
-      
-      // Assign role permission to the created staff
+
       if (staff?.id && roleId) {
         const payload = {
           hospitalId: Number(hospitalId),
           roleId: roleId,
           userType: "staff",
-          staffIds: [
-            {
-              id: Number(staff.id),
-              roleId: roleId
-            }
-          ]
+          staffIds: [{ id: Number(staff.id), roleId: roleId }]
         };
-        
         await assignPermissions(payload).unwrap();
       }
-      
+
       showAddToast(
         `${formData.name} has been added as staff with role ${selectedRoleName}!`,
         SUCCESS_DURATION,
@@ -551,78 +763,98 @@ const AddStaff = () => {
           'Designation': formData.designation,
           'Role': selectedRoleName,
           'Hospital': hospitalName,
-          'Status': isActive ? 'Active' : 'Inactive'
+          'Status': isActive ? 'Active' : 'Inactive',
+          ...(requiresShiftTime ? {
+            'Shift Start': formData.shiftStartTime,
+            'Shift End': formData.shiftEndTime
+          } : {})
         }
       );
-      
-      setIsSubmitting(false);
-      setSubmitSuccess(true);
-      
-      // ✅ FIXED: Navigate to hospital staff list after success - NO TOAST
-      setTimeout(() => {
-        handleGoBack();
-      }, 2000);
-      
-    } catch (error) {
-      handleApiError(error);
-    }
-  };
 
-  const handleCancel = () => {
-    // ✅ FIXED: Cancel goes back - NO TOAST VALIDATION
-    handleGoBack();
+      setIsSubmitting(false);
+      setTimeout(() => handleGoBack(), 2000);
+
+    } catch (error) {
+      console.error('Create Staff Error:', error);
+      const status = error?.status || error?.originalStatus;
+
+      if (status === 401) {
+        showErrorToast('Session expired. Please login again.', TOAST_DURATION);
+        setTimeout(() => { window.location.href = '/sign-in'; }, 2000);
+        return;
+      }
+
+      const message =
+        error?.data?.error?.details?.[0]?.message ||
+        error?.data?.details?.[0]?.message ||
+        error?.data?.errors?.[0]?.message ||
+        error?.data?.error?.message ||
+        error?.data?.message ||
+        error?.error ||
+        error?.message ||
+        'Failed to add staff';
+
+      showErrorToast(message, SUCCESS_DURATION);
+      setIsSubmitting(false);
+    }
   };
 
   const isFormSubmitting = isSubmitting || isApiLoading || isAssigning;
   const isActive = formData.status === 'active';
-  const isLoadingData = rolesLoading;
 
-  if (isLoadingData) {
+  if (!hospitalId) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center max-w-md p-8 bg-white rounded-lg shadow-lg">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Hospital ID Not Found</h2>
+          <p className="text-gray-600 mb-4">Please log in again to access this page.</p>
+          <Button variant="primary" onClick={() => navigate('/login')}>Go to Login</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (rolesLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C62A0]"></div>
-          <p className="mt-3 text-gray-500">Loading roles...</p>
+          <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#1C62A0] mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ background: '#f4f6f9', fontFamily: "'Segoe UI', sans-serif" }}>
-
-      <div className="p-6">
-        <Card className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-3 mb-1">
-                <button 
-                  onClick={handleGoBack} 
-                  className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                  type="button"
-                >
-                  <ArrowLeft size={20} className="text-gray-600" />
-                </button>
-                <h2 className="text-lg font-semibold text-gray-800">Staff Information</h2>
-              </div>
-              <p className="text-sm text-gray-500 mt-1">Add new staff member information</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <Button variant="ghost" size="sm" onClick={handleGoBack} className="p-2">
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Add New Staff</h1>
+              <p className="text-sm text-gray-500 mt-1">Create a new staff profile in the system</p>
               {hospitalId && (
-                <p className="text-xs text-gray-400 mt-0.5">Hospital ID: {hospitalId}</p>
+                <p className="text-xs text-blue-600 mt-0.5">Hospital ID: {hospitalId}</p>
               )}
             </div>
+          </div>
+        </div>
 
+        <form onSubmit={handleSubmit}>
+          {/* Plain container (overflow-visible) so dropdowns are not clipped */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-visible">
             <div className="p-6 space-y-6">
-              {/* Profile Image Upload Section */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 pb-4">
+              {/* Profile Image Upload */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 p-4 bg-gray-50 rounded-lg">
                 <div className="flex-shrink-0">
                   <div className="relative">
-                    <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
+                    <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center border-2 border-gray-200 overflow-hidden shadow-sm">
                       {previewImage ? (
-                        <img 
-                          src={previewImage} 
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={previewImage} alt="Profile" className="w-full h-full object-cover" />
                       ) : (
                         <Image className="h-8 w-8 text-gray-400" />
                       )}
@@ -638,7 +870,6 @@ const AddStaff = () => {
                     )}
                   </div>
                 </div>
-                
                 <div className="flex-1 w-full">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Profile Image</label>
                   <div>
@@ -656,301 +887,401 @@ const AddStaff = () => {
                       className="inline-flex items-center gap-2"
                       disabled={isFormSubmitting}
                     >
-                      <Upload className="h-4 w-4" />
-                      Upload Image
+                      <Upload className="h-4 w-4" /> Upload Image
                     </Button>
-                    <p className="text-xs text-gray-400 mt-2">
-                      JPEG, PNG, GIF, WEBP accepted. Max 5MB
-                    </p>
+                    <p className="text-xs text-gray-400 mt-2">JPEG, PNG, GIF, WEBP accepted. Max 5MB</p>
                   </div>
-                  {errors.profileImage && <Alert type="error" message={errors.profileImage} className="mt-2" />}
+                  {errors.profileImage && <p className="text-sm text-red-600 mt-1">{errors.profileImage}</p>}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <Input 
-                  label="Full Name *" 
-                  name="name" 
-                  value={formData.name} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.name} 
-                  required 
-                  placeholder="Enter full name" 
+              {/* Basic Info */}
+              <div className={GRID_CLASS}>
+                <Input
+                  label="Full Name" name="name" icon={User}
+                  placeholder="Enter full name"
+                  value={formData.name} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.name} touched={touched.name} required
                 />
-                
-                <Input 
-                  label="Email *" 
-                  name="email" 
-                  type="email" 
-                  value={formData.email} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.email} 
-                  required 
-                  placeholder="staff@example.com" 
+                <Input
+                  label="Email" name="email" type="email" icon={Mail}
+                  placeholder="staff@example.com"
+                  value={formData.email} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.email} touched={touched.email} required
                 />
-                
+              </div>
+
+              <div className={GRID_CLASS}>
                 <PasswordInput
-                  label="Password *"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.password}
-                  touched={true}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                  placeholder="Enter password (min 8 characters)"
-                  icon={Lock}
-                  required
+                  label="Password" name="password"
+                  value={formData.password} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.password} touched={touched.password}
+                  showPassword={showPassword} setShowPassword={setShowPassword}
+                  placeholder="Create password (min 8 characters)"
+                  icon={Lock} required
                 />
-                
                 <PasswordInput
-                  label="Confirm Password *"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={errors.confirmPassword}
-                  touched={true}
-                  showPassword={showConfirmPassword}
-                  setShowPassword={setShowConfirmPassword}
+                  label="Confirm Password" name="confirmPassword"
+                  value={formData.confirmPassword} onChange={handleChange} onBlur={handleBlur}
+                  error={errors.confirmPassword} touched={touched.confirmPassword}
+                  showPassword={showConfirmPassword} setShowPassword={setShowConfirmPassword}
                   placeholder="Confirm your password"
-                  icon={Lock}
-                  required
+                  icon={Lock} required
                 />
-                
-                <Input 
-                  label="Phone Number *" 
-                  name="phone" 
-                  type="tel" 
-                  value={formData.phone} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.phone} 
-                  required 
-                  placeholder="+1 00000 00000" 
+              </div>
+
+              <div className={GRID_CLASS}>
+                <Input
+                  label="Phone Number" name="phone" type="tel" icon={Phone}
+                  placeholder="10 digit phone number"
+                  value={formData.phone} onChange={handleChange}
+                  error={errors.phone} touched={touched.phone}
                 />
 
-                {/* Assign Role - Dynamic dropdown like AddNewUser */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Assign Role <span className="text-red-500">*</span>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date of Birth
                   </label>
                   <div className="relative">
-                    <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <select
-                      name="roleId"
-                      value={formData.roleId}
-                      onChange={handleChange}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent appearance-none bg-white"
-                    >
-                      <option value="">Select a role</option>
-                      {rolesList.map((role) => (
-                        <option key={role.id} value={role.id}>
-                          {role.name || role.roleName}
-                        </option>
-                      ))}
-                    </select>
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.dob}
+                      onChange={(iso) => handleDateChange('dob', iso)}
+                      mode="dob"
+                      placeholder="DD/MM/YYYY"
+                      className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:border-transparent ${
+                        errors.dob && touched.dob
+                          ? 'border-red-500 focus:ring-red-500'
+                          : 'border-gray-300 focus:ring-[#1C62A0]'
+                      }`}
+                    />
                   </div>
-                  {errors.roleId && <p className="mt-1 text-xs text-red-500">{errors.roleId}</p>}
-                  {formData.roleId && (
-                    <div className="mt-2">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
-                        {getRoleNameById(formData.roleId)}
+                  {errors.dob && touched.dob && (
+                    <p className="mt-1 text-sm text-red-500">{errors.dob}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className={GRID_CLASS}>
+                <CustomSelect
+                  label="Gender"
+                  icon={Users}
+                  value={formData.gender}
+                  options={GENDER_SELECT_OPTIONS}
+                  onChange={(value) => handleChange({ target: { name: 'gender', value } })}
+                  required
+                  className={SELECT_FORM_CLASS}
+                />
+
+                <Input
+                  label="Qualification" name="qualification" icon={GraduationCap}
+                  placeholder="MBA, B.Tech, etc."
+                  value={formData.qualification} onChange={handleChange}
+                />
+              </div>
+
+              {/* Designation and Joining Date */}
+              <div className={GRID_CLASS}>
+                <CustomSelect
+                  label="Designation"
+                  icon={Briefcase}
+                  value={formData.designation}
+                  options={designations.map(d => ({ value: d, label: d }))}
+                  placeholder="Select designation"
+                  onChange={(value) => handleChange({ target: { name: 'designation', value } })}
+                  onBlur={() => handleBlur({ target: { name: 'designation', value: formData.designation } })}
+                  error={errors.designation}
+                  touched={touched.designation}
+                  required
+                  className={SELECT_FORM_CLASS}
+                />
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Joining Date
+                  </label>
+                  <div className="relative">
+                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400 z-10 pointer-events-none" />
+                    <DatePicker
+                      value={formData.joiningDate}
+                      onChange={(iso) => handleDateChange('joiningDate', iso)}
+                      mode="any"
+                      placeholder="DD/MM/YYYY"
+                      className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Staff Type and Job Type */}
+              <div className={GRID_CLASS}>
+                <CustomSelect
+                  label="Staff Type"
+                  icon={Users}
+                  value={formData.staffType}
+                  options={staffTypes.map(t => ({ value: t, label: t }))}
+                  placeholder="Select staff type"
+                  onChange={(value) => handleChange({ target: { name: 'staffType', value } })}
+                  className={SELECT_FORM_CLASS}
+                />
+
+                <CustomSelect
+                  label="Job Type"
+                  icon={Briefcase}
+                  value={formData.jobType}
+                  options={jobTypes.map(t => ({ value: t, label: t }))}
+                  placeholder="Select job type"
+                  onChange={(value) => handleChange({ target: { name: 'jobType', value } })}
+                  className={SELECT_FORM_CLASS}
+                />
+              </div>
+
+              {/* ✅ Shift Time Fields — only for Day Shift / Night Shift */}
+              {requiresShiftTime && (
+                <ShiftTimeInput
+                  shiftStartTime={formData.shiftStartTime}
+                  shiftEndTime={formData.shiftEndTime}
+                  onChange={handleChange}
+                  onBlur={handleShiftTimeBlur}
+                  errors={errors}
+                  touched={touched}
+                />
+              )}
+
+              {/* Role */}
+              <CustomSelect
+                label="Assign Role"
+                icon={Shield}
+                value={formData.roleId != null ? String(formData.roleId) : ''}
+                options={roleOptions}
+                placeholder="Select a role"
+                onChange={(value) => handleChange({ target: { name: 'roleId', value } })}
+                onBlur={() => handleBlur({ target: { name: 'roleId', value: formData.roleId } })}
+                error={errors.roleId}
+                touched={touched.roleId}
+                required
+                className={SELECT_FORM_CLASS}
+              />
+              {formData.roleId && (
+                <div className="-mt-3">
+                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getRoleBadgeColor(formData.roleId)}`}>
+                    {getRoleNameById(formData.roleId)}
+                  </span>
+                </div>
+              )}
+
+              {/* Languages */}
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Known Languages</label>
+                {formData.knowLanguages.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {formData.knowLanguages.map(lang => (
+                      <span key={lang} className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm">
+                        {lang}
+                        <button type="button" onClick={() => removeLanguage(lang)}>
+                          <X className="h-3 w-3" />
+                        </button>
                       </span>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)}
+                    className="w-full px-3 py-2 text-left border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1C62A0] flex items-center justify-between bg-white"
+                  >
+                    <span className={formData.knowLanguages.length === 0 ? 'text-gray-500' : 'text-gray-700'}>
+                      {formData.knowLanguages.length === 0 ? 'Select languages' : `${formData.knowLanguages.length} language(s) selected`}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform ${isLanguageDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {isLanguageDropdownOpen && (
+                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                      {languages.map(lang => (
+                        <label key={lang} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.knowLanguages.includes(lang)}
+                            onChange={() => handleLanguageSelect(lang)}
+                            className="h-4 w-4 text-[#1C62A0] rounded"
+                          />
+                          <span className="ml-2 text-sm text-gray-700">{lang}</span>
+                        </label>
+                      ))}
                     </div>
                   )}
                 </div>
-                
-                <Select 
-                  label="Gender" 
-                  name="gender" 
-                  options={genders} 
-                  value={formData.gender} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.gender} 
-                />
-                
-                <Input 
-                  label="Date of Birth" 
-                  name="dob" 
-                  type="date" 
-                  value={formData.dob} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.dob} 
-                />
-                
-                <Select 
-                  label="Designation *" 
-                  name="designation" 
-                  options={designations} 
-                  value={formData.designation} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.designation} 
-                  required 
-                />
-                
-                <Input 
-                  label="Joining Date" 
-                  name="joiningDate" 
-                  type="date" 
-                  value={formData.joiningDate} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.joiningDate} 
-                />
-                
-                <Select 
-                  label="Staff Type" 
-                  name="staffType" 
-                  options={staffTypes} 
-                  value={formData.staffType} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.staffType} 
-                />
-                
-                <Select 
-                  label="Job Type" 
-                  name="jobType" 
-                  options={jobTypes} 
-                  value={formData.jobType} 
-                  onChange={handleChange} 
-                  onBlur={handleBlur} 
-                  error={errors.jobType} 
-                />
               </div>
 
-              {/* Languages Known */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Languages Known</label>
-                <div className="flex gap-2 mb-2">
-                  <select
-                    value={languagesInput}
-                    onChange={(e) => setLanguagesInput(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#1C62A0]"
-                  >
-                    <option value="">Select a language</option>
-                    {languages.map(lang => (
-                      <option key={lang} value={lang}>{lang}</option>
-                    ))}
-                  </select>
-                  <Button type="button" variant="outline" onClick={handleAddLanguage}>Add</Button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {formData.knowLanguages.map((lang, index) => (
-                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-sm flex items-center gap-1">
-                      {lang}
-                      <button type="button" onClick={() => handleRemoveLanguage(lang)} className="hover:text-red-500">×</button>
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Qualification */}
-              <div>
-                <Input 
-                  label="Qualification" 
-                  name="qualification" 
-                  value={formData.qualification} 
-                  onChange={handleChange} 
-                  placeholder="MBA, B.Tech, etc." 
-                />
-              </div>
-
-              {/* Address Information */}
-              <div>
-                <h4 className="text-md font-semibold text-gray-800 mb-4 mt-2">Address Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Select 
-                    label="Country" 
-                    name="address.country" 
-                    options={countries} 
-                    value={formData.address.country} 
-                    onChange={handleChange} 
-                  />
-                  <Select 
-                    label="State" 
-                    name="address.state" 
-                    options={states} 
-                    value={formData.address.state} 
-                    onChange={handleChange} 
-                  />
-                  <Select 
-                    label="District" 
-                    name="address.district" 
-                    options={districts} 
-                    value={formData.address.district} 
-                    onChange={handleChange} 
-                  />
-                  <div className="md:col-span-2">
-                    <Input 
-                      label="Address Line 1" 
-                      name="addressLine1" 
-                      value={formData.addressLine1} 
-                      onChange={handleAddressLineChange} 
-                      placeholder="Street address" 
-                    />
+              {/* Address */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Address Information</h3>
+                <div className="space-y-5">
+                  {/* Country (fixed India) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <div className="w-full px-4 py-2 rounded-lg border border-gray-200 bg-gray-100 flex justify-between">
+                      <span>🇮🇳 India</span>
+                      <span className="text-green-600 font-medium text-sm">✓ Default</span>
+                    </div>
                   </div>
-                  <div className="md:col-span-2">
-                    <Input 
-                      label="Address Line 2" 
-                      name="addressLine2" 
-                      value={formData.addressLine2} 
-                      onChange={handleAddressLineChange} 
-                      placeholder="Apt, suite, unit (optional)" 
-                    />
+
+                  {/* Pincode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Pincode
+                    </label>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="pincode"
+                        value={formData.pincode}
+                        onChange={(e) => handlePincodeChange(e.target.value)}
+                        onBlur={() => setTouched(prev => ({ ...prev, pincode: true }))}
+                        placeholder="Enter 6 digit pincode (Optional)"
+                        maxLength={6}
+                        className={`w-full pl-10 pr-10 py-2 rounded-lg border ${
+                          errors.pincode && touched.pincode ? 'border-red-500' : 'border-gray-300'
+                        } focus:outline-none focus:ring-2 focus:ring-[#1C62A0] focus:border-transparent`}
+                      />
+                      {isPincodeLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600" />
+                        </div>
+                      )}
+                      {!isPincodeLoading && postOffices.length > 0 && (
+                        <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-green-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      Enter pincode to automatically find the location.
+                    </p>
+                    {isPincodeLoading && (
+                      <p className="text-xs text-blue-600 mt-2">Finding location...</p>
+                    )}
+                    {isPincodeError && (
+                      <p className="text-xs text-red-500 mt-2">
+                        Unable to fetch pincode details. Please try again.
+                      </p>
+                    )}
+                    {formData.pincode.length === 6 &&
+                      !isPincodeLoading &&
+                      !isPincodeError &&
+                      postOffices.length === 0 && (
+                        <p className="text-xs text-red-500 mt-2">
+                          Invalid pincode or no location found.
+                        </p>
+                      )}
+                    {touched.pincode && errors.pincode && (
+                      <p className="text-sm text-red-600 mt-1">{errors.pincode}</p>
+                    )}
                   </div>
-                  <Input 
-                    label="Pincode" 
-                    name="address.pincode" 
-                    value={formData.address.pincode} 
-                    onChange={handleChange} 
-                    placeholder="Postal code (6 digits)" 
-                    maxLength={6}
+
+                  {/* State + District (read-only, auto-filled) */}
+                  <div className={GRID_CLASS}>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.stateName}
+                          readOnly
+                          placeholder="Automatically detected state"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                        <input
+                          value={formData.district}
+                          readOnly
+                          placeholder="Automatically detected district"
+                          className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 bg-gray-100 text-gray-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Local Area (post offices) */}
+                  <SearchableCityDropdown
+                    label="Local Area"
+                    options={[
+                      ...new Map(
+                        postOffices.map((office) => [
+                          office.Name,
+                          { name: office.Name }
+                        ])
+                      ).values()
+                    ]}
+                    value={formData.localArea}
+                    onChange={handleLocalAreaChange}
+                    placeholder={
+                      postOffices.length === 0
+                        ? 'Enter pincode first'
+                        : 'Select local area'
+                    }
+                    required={postOffices.length > 0}
+                    disabled={postOffices.length === 0}
+                    error={errors.localArea}
+                    touched={touched.localArea}
                   />
                 </div>
               </div>
 
-              {/* Status Toggle */}
+              {/* Status */}
               <div className="pt-4 border-t border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Status</label>
-                <div className="flex items-center">
-                  <Switch checked={isActive} onChange={handleStatusToggle} />
-                  <span className="ml-3 text-sm text-gray-600">{isActive ? 'Active' : 'Inactive'}</span>
+                <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Account Status</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Toggle to activate or deactivate this staff member
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-sm font-medium ${isActive ? 'text-green-600' : 'text-red-600'}`}>
+                        {isActive ? 'Active' : 'Inactive'}
+                      </span>
+                      <Switch checked={isActive} onChange={handleStatusToggle} />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    {isActive ? (
+                      <div className="flex items-center gap-1 text-green-600">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="text-xs font-medium">Account is active</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 text-red-600">
+                        <XCircle className="h-4 w-4" />
+                        <span className="text-xs font-medium">Account is inactive</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Toggle to activate or deactivate this staff member</p>
               </div>
             </div>
 
-            {/* Form Actions */}
-            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCancel}
-                className="flex items-center gap-2"
-                disabled={isFormSubmitting}
-              >
+            {/* Actions */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end gap-3 rounded-b-xl">
+              <Button type="button" variant="outline" onClick={handleGoBack} disabled={isFormSubmitting}>
                 Cancel
               </Button>
               <Button
-                type="submit"
-                variant="primary"
-                isLoading={isFormSubmitting}
-                className="flex items-center gap-2"
-                disabled={isFormSubmitting}
+                type="submit" variant="primary"
+                disabled={isFormSubmitting} loading={isFormSubmitting}
               >
                 {isFormSubmitting ? 'Saving...' : 'Save Staff'}
               </Button>
             </div>
-          </form>
-        </Card>
+          </div>
+        </form>
       </div>
     </div>
   );
