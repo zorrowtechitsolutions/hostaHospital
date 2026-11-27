@@ -1,4 +1,4 @@
-// Consultation.js - COMPLETE FIXED VERSION
+// Consultation.js - COMPLETE FIXED VERSION (v2)
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -317,6 +317,7 @@ const Consultation = () => {
   const {
     data: patientData,
     isLoading: isPatientLoading,
+    // ✅ isFetching kept for reference but no longer used as a UI guard
     isFetching: isPatientFetching,
     refetch: refetchPatient,
   } = useGetPatientByIdQuery(patientId ? String(patientId) : "", {
@@ -332,12 +333,16 @@ const Consultation = () => {
     return patientData.data;
   }, [patientData]);
 
+  // ✅ FIX #2: Removed the explicit refetchPatient() call.
+  // RTK Query automatically refetches when the query argument changes,
+  // so calling refetch() here causes a redundant double-fetch (and makes
+  // isPatientFetching flip true→false→true).
   useEffect(() => {
     if (patientId && patientId !== currentPatientId) {
       setCurrentPatientId(patientId);
-      refetchPatient();
+      // No refetch needed — RTK Query handles arg changes automatically.
     }
-  }, [patientId, currentPatientId, refetchPatient]);
+  }, [patientId, currentPatientId]);
 
   useEffect(() => {
     const scrollToTop = () => {
@@ -364,12 +369,14 @@ const Consultation = () => {
     return () => cancelAnimationFrame(frame);
   }, [patientId]);
 
+  // ✅ FIX #4: Tie redirect only to isLoading (not isFetching), so a background
+  // refetch cannot delay or duplicate the redirect timer.
   useEffect(() => {
-    if (!patientId && !isPatientLoading && !isPatientFetching) {
+    if (!patientId && !isPatientLoading) {
       const timer = setTimeout(() => navigate("/appointments"), 800);
       return () => clearTimeout(timer);
     }
-  }, [patientId, isPatientLoading, isPatientFetching, navigate]);
+  }, [patientId, isPatientLoading, navigate]);
 
   const currentHospitalId = getHospitalId();
 
@@ -480,7 +487,7 @@ const Consultation = () => {
     if (!Number.isFinite(bookingNumber) || bookingNumber <= 0) {
       missingData.push("Booking Number");
     }
-    // ✅ NEW: require the database id for completing the booking
+    // ✅ require the database id for completing the booking
     if (!bookingId) {
       missingData.push("Booking ID");
     }
@@ -817,10 +824,11 @@ const Consultation = () => {
         prescriptionData
       ).unwrap();
 
-      // ✅ Refresh patient list after prescription creation
-      dispatch(
-        patientsApi.util.invalidateTags(["Patient"])
-      );
+      // ✅ Refresh patient list after prescription creation.
+      // NOTE: This triggers a background refetch of the patient query. With the
+      // fixed loading guard (FIX #1), the form will NOT unmount during this
+      // refetch — the user stays on the page until navigate() is called below.
+      dispatch(patientsApi.util.invalidateTags(["Patient"]));
 
       const prescriptionNumber =
         prescriptionResponse?.data?.prescriptionNumber;
@@ -894,7 +902,10 @@ const Consultation = () => {
     }
   };
 
-  if (patientId && (isPatientLoading || isPatientFetching)) {
+  // ✅ FIX #1: Only show the full-page loader on the INITIAL load when there is
+  // no cached patient data yet. Background refetches (e.g. after
+  // invalidateTags in handleEndConsultation) must NOT unmount the form.
+  if (patientId && isPatientLoading && !patientData) {
     return (
       <div className="p-4 bg-gray-50 min-h-screen font-sans flex items-center justify-center">
         <p className="text-gray-500 text-sm">Loading patient details...</p>

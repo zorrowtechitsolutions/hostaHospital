@@ -12,6 +12,14 @@ export type BookingStatus =
   | "completed"
   | "cancel";
 
+export interface Address {
+  country?: string;
+  state?: string;
+  district?: string;
+  place: string;
+  pincode: number | string;
+}
+
 export interface BookingRequest {
   id?: string | number;
   _id?: string;
@@ -22,7 +30,7 @@ export interface BookingRequest {
   userId?: number | string;
   patient_name?: string;
   patient_dob?: string;
-  patient_place?: string;
+  address?: Address;
   patient_phone?: string;
   doctorId?: string | number;
   displayName?: string;
@@ -94,6 +102,30 @@ export interface GetBookingsParams {
   limit?: number;
   skipHospitalFilter?: boolean;
 }
+
+// Helper: normalize any date format to YYYY-MM-DD for the API
+const formatBookingDate = (date?: string) => {
+  if (!date) return date;
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+
+  // MM-DD-YYYY to YYYY-MM-DD
+  if (/^\d{2}-\d{2}-\d{4}$/.test(date)) {
+    const [month, day, year] = date.split("-");
+    return `${year}-${month}-${day}`;
+  }
+
+  // MM/DD/YYYY to YYYY-MM-DD
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+    const [month, day, year] = date.split("/");
+    return `${year}-${month}-${day}`;
+  }
+
+  return date;
+};
 
 export const bookingApi = api.injectEndpoints({
   overrideExisting: false,
@@ -267,7 +299,7 @@ export const bookingApi = api.injectEndpoints({
           body: {
             patient_name: data.patient_name,
             patient_dob: data.patient_dob,
-            patient_place: data.patient_place,
+            address: data.address,
             patient_phone: data.patient_phone,
             patient_age: data.patient_age,
             patient_gender: data.patient_gender,
@@ -276,21 +308,15 @@ export const bookingApi = api.injectEndpoints({
             displayName: data.displayName,
             department: data.department,
 
-            booking_date: data.booking_date,
+            booking_date: formatBookingDate(data.booking_date),
             consulting_time: data.consulting_time,
-            token: data.token,
 
-            // Ensure pending requests explicitly send pending
+            token: data.token,
             status: data.status || "pending",
             booking_status: data.booking_status,
 
-            hospitalId:
-              hospitalId !== undefined && hospitalId !== null
-                ? Number(hospitalId)
-                : undefined,
-
-            hospitalName: hospitalName,
-
+            hospitalId: Number(hospitalId),
+            hospitalName,
             patientId: data.patientId,
 
             // Backend generates bookingNumber — do not send it
@@ -309,7 +335,7 @@ export const bookingApi = api.injectEndpoints({
         url: `/booking/${id}`,
         method: "PUT",
         body: {
-          booking_date: data.date,
+          booking_date: formatBookingDate(data.date),
           consulting_time: data.consulting_time,
           notes: data.notes || "",
           status: "accepted",
@@ -377,7 +403,13 @@ export const bookingApi = api.injectEndpoints({
       query: ({ id, data }) => ({
         url: `/booking/${id}`,
         method: "PUT",
-        body: data,
+        body: {
+          ...data,
+          // Format date if present so all updates use the same YYYY-MM-DD format
+          ...(data.booking_date
+            ? { booking_date: formatBookingDate(data.booking_date) }
+            : {}),
+        },
       }),
       invalidatesTags: ["Booking"],
     }),
