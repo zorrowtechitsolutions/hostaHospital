@@ -298,7 +298,7 @@ const AddAppointmentModal = ({
               <Flatpickr
                 value={toDisplayDate(formData.date)}
                 options={{
-                  dateFormat: "d/m/Y",
+                  dateFormat: "d-m-Y",
                   minDate: "today",
 
                   // Disable doctor's non-working days

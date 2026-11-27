@@ -210,6 +210,7 @@ const extractAddress = (patient) => {
     patient.patientAddress,
     patient.patient_address,
     patient.addressLine,
+    patient.location,
   ];
 
   let addressData = null;
@@ -234,6 +235,20 @@ const extractAddress = (patient) => {
   }
 
   return formatAddress(addressData);
+};
+
+// ✅ Build a structured address object for the booking payload.
+// Uses `patient.location` (the field returned by the patients API).
+const getPatientAddressObject = (patient) => {
+  const address = patient?.location || {};
+
+  return {
+    country: address.country || "",
+    district: address.district || "",
+    place: address.place || "",
+    state: address.state || "",
+    pincode: address.pincode || ""
+  };
 };
 
 // Helper functions
@@ -795,51 +810,58 @@ const Patients = () => {
 
   const handleConfirmAppointment = useCallback(async (approveData) => {
     try {
-      const patientNumber = bookingData?.patientId
-        ? Number(bookingData.patientId.replace("#PT", ""))
-        : null;
+      const patient = appointmentPatient;
 
       const payload = {
-        patientNumber: patientNumber,
-        patientId: patientNumber,
-        userId: Number(bookingData?.userId),
-        patient_name: bookingData?.patient_name,
-        patient_dob: formatDate(bookingData?.patient_dob),
-        patient_place: bookingData?.patient_place,
-        patient_phone: bookingData?.patient_phone,
-        patient_age: calculateAge(bookingData?.patient_dob),
-        patient_gender: bookingData?.patient_gender || appointmentPatient?.gender,
-        hospitalId: Number(bookingData?.hospitalId),
-        doctorId: Number(bookingData?.doctorId),
-        booking_date: formatDate(approveData?.booking_date),
+        booking_date: approveData?.booking_date,
+        booking_status: "hospital booking",
+        consulting_time: approveData?.consulting_time,
+
         department: bookingData?.department,
         displayName: bookingData?.displayName,
-        consulting_time: approveData?.consulting_time,
-        token: approveData?.token ? parseInt(approveData.token) : null,
+        doctorId: Number(bookingData?.doctorId),
+
+        hospitalId: Number(bookingData?.hospitalId),
+        hospitalName: bookingData?.hospitalName || "bbb",
+
+        patientId: patient?.id || patient?._id,
+        patient_age: calculateAge(patient?.dob || patient?.dateOfBirth),
+        patient_dob: formatDate(patient?.dob || patient?.dateOfBirth),
+        patient_gender: patient?.gender,
+
+        patient_name: patient?.name,
+        patient_phone: patient?.mobileNumber,
+
+        address: getPatientAddressObject(appointmentPatient),
+
         status: "accepted",
-        booking_status: "hospital booking"
+        token: approveData?.token
+          ? Number(approveData.token)
+          : null
       };
+
+      console.log("BOOKING PAYLOAD:", payload);
 
       const response = await createBooking(payload).unwrap();
 
+      console.log("BOOKING RESPONSE:", response);
+
       showSuccessToast(
         "Appointment confirmed successfully!",
-        4000,
-        {
-          Patient: payload.patient_name,
-          Doctor: bookingData?.displayName,
-          Date: approveData.booking_date,
-          Time: approveData.consulting_time,
-          Token: response?.data?.token || payload.token
-        }
+        4000
       );
 
       setShowApproveModal(false);
       setBookingData(null);
       setAppointmentPatient(null);
       navigate("/appointments");
+
     } catch (err) {
-      showErrorToast(err?.data?.message || "Failed to confirm appointment", 3000);
+      console.error("Booking error:", err);
+      showErrorToast(
+        err?.data?.message || "Failed to confirm appointment",
+        3000
+      );
     }
   }, [bookingData, appointmentPatient, createBooking, navigate]);
 
