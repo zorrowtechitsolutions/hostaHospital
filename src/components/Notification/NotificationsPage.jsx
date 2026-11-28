@@ -1,15 +1,14 @@
-// src/components/NotificationsPage.jsx - FIXED for staff
-import React, { useState, useEffect , useCallback} from 'react';
+// src/components/NotificationsPage.jsx
+import React, { useState, useEffect } from 'react';
 import { Bell, Trash2, CheckCheck, Calendar, UserPlus, XCircle, X, Filter, RefreshCcw, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
-  useGetNotificationsByHospitalQuery,
   useGetNotificationsByRoleQuery,
-  useMarkAllNotificationsAsReadByHospitalMutation,
+  useMarkNotificationAsReadMutation,
   useMarkAllNotificationsAsReadMutation,
   useDeleteNotificationMutation,
-  useUpdateNotificationMutation,
+  useDeleteAllNotificationsMutation,
 } from '../../../app/service/notification';
 import { getHospitalId, getUserRole, getAuthUser } from '../../utils/auth';
 import { showSuccessToast, showErrorToast } from '../ui/Toast';
@@ -27,127 +26,80 @@ const NotificationsPage = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  
+
   const auth = getAuthUser();
   const userRole = getUserRole();
   const hospitalId = getHospitalId();
 
-  const getEntityId = () => {
-    if (userRole === "doctor") {
-      return auth?.doctorId || auth?.id;
-    }
-    if (userRole === "staff") {
-      return auth?.staffId || auth?.id;
-    }
-    return null;
-  };
+  const entityId =
+    userRole === "hospital"
+      ? hospitalId
+      : userRole === "doctor"
+      ? auth?.doctorId || auth?.id
+      : userRole === "staff"
+      ? auth?.staffId || auth?.id
+      : auth?.id;
 
-  const entityId = getEntityId();
+  const role = userRole === "super_admin" ? "superadmin" : userRole;
 
-  // Hospital notifications - ONLY for hospital admin
-  const hospitalQuery = useGetNotificationsByHospitalQuery(
+  const {
+    data: notificationResponse,
+    isLoading,
+    isFetching,
+    error,
+    refetch,
+  } = useGetNotificationsByRoleQuery(
     {
-      hospitalId: hospitalId,
-      page: currentPage,
-      limit: itemsPerPage,
-    },
-    {
-      skip: userRole !== "hospital",
-      refetchOnMountOrArgChange: true,
-    }
-  );
-
-  // Role-based notifications - for doctors AND staff
-  const roleQuery = useGetNotificationsByRoleQuery(
-    {
-      role: userRole,
+      role,
       id: entityId,
       page: currentPage,
       limit: itemsPerPage,
     },
     {
-      skip: userRole !== "doctor" && userRole !== "staff",
+      skip: !role || !entityId,
       refetchOnMountOrArgChange: true,
     }
   );
 
-  // Select notifications based on role
-  let notifications = [];
+  const notifications = Array.isArray(notificationResponse?.data)
+    ? notificationResponse.data
+    : notificationResponse?.data?.rows || [];
 
-  if (userRole === "hospital") {
-    notifications = hospitalQuery.data?.data || [];
-  } else if (userRole === "doctor" || userRole === "staff") {
-    // Staff and doctors ONLY get their role-specific notifications
-    notifications = roleQuery.data?.data || [];
-  }
+  const pagination = notificationResponse?.pagination || {};
 
-  const isLoading = () => {
-    if (userRole === "hospital") {
-      return hospitalQuery.isLoading;
-    } else if (userRole === "doctor" || userRole === "staff") {
-      return roleQuery.isLoading;
-    }
-    return false;
-  };
+  const totalNotifications = () =>
+    pagination.totalItems ??
+    pagination.total ??
+    notificationResponse?.data?.count ??
+    notifications.length;
 
-  const error = () => {
-    if (userRole === "hospital") {
-      return hospitalQuery.error;
-    } else if (userRole === "doctor" || userRole === "staff") {
-      return roleQuery.error;
-    }
-    return null;
-  };
+  const totalPages = () =>
+    pagination.totalPages ??
+    pagination.pages ??
+    1;
 
-  const refetch = () => {
-    if (userRole === "hospital") {
-      hospitalQuery.refetch();
-    } else if (userRole === "doctor" || userRole === "staff") {
-      roleQuery.refetch();
-    }
-  };
-
-  const isFetching = hospitalQuery.isFetching || roleQuery.isFetching;
-
-  const totalNotifications = () => {
-    if (userRole === "hospital") {
-      return hospitalQuery.data?.total || 0;
-    } else if (userRole === "doctor" || userRole === "staff") {
-      return roleQuery.data?.total || 0;
-    }
-    return 0;
-  };
-
-  const totalPages = () => {
-    if (userRole === "hospital") {
-      return hospitalQuery.data?.totalPages || 1;
-    } else if (userRole === "doctor" || userRole === "staff") {
-      return roleQuery.data?.totalPages || 1;
-    }
-    return 1;
-  };
-
-  const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
-  const [markAllAsReadRole] = useMarkAllNotificationsAsReadMutation();
+  const [markAsRead] = useMarkNotificationAsReadMutation();
+  const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
-  const [updateNotification] = useUpdateNotificationMutation();
+  const [deleteAllNotifications] = useDeleteAllNotificationsMutation();
 
   const isNotificationUnread = (notification) => {
-    if (userRole === "hospital") {
-      return !notification.hospitalReadStatus?.[hospitalId];
-    } else if (userRole === "doctor") {
-      return !notification.doctorReadStatus?.[entityId];
-    } else if (userRole === "staff") {
-      return !notification.staffReadStatus?.[entityId];
-    }
-    return false;
+    const statusField = {
+      hospital: "hospitalReadStatus",
+      doctor: "doctorReadStatus",
+      staff: "staffReadStatus",
+      user: "userReadStatus",
+      pharmacy: "pharmacyReadStatus",
+      lab: "labReadStatus",
+      superadmin: "superAdminReadStatus",
+    }[role];
+
+    return statusField
+      ? notification[statusField]?.[String(entityId)] !== true
+      : false;
   };
 
-  const getUnreadNotifications = () => {
-    return notifications.filter(notification => isNotificationUnread(notification));
-  };
-
-  const unreadNotifications = getUnreadNotifications();
+  const unreadNotifications = notifications.filter(isNotificationUnread);
   const unreadCount = unreadNotifications.length;
 
   let filteredNotifications = [...notifications];
@@ -165,39 +117,39 @@ const NotificationsPage = () => {
 
   // Socket events
   useEffect(() => {
-    const handleNotificationCreated = (data) => {
+    const handleNotificationCreated = () => {
       refetch();
     };
 
-    const handleNotificationRead = (data) => {
+    const handleNotificationRead = () => {
       refetch();
     };
 
-    const handleDoctorRegistered = (data) => {
+    const handleDoctorRegistered = () => {
       refetch();
     };
 
-    const handleDoctorUpdated = (data) => {
+    const handleDoctorUpdated = () => {
       refetch();
     };
 
-    const handleDoctorDeleted = (data) => {
+    const handleDoctorDeleted = () => {
       refetch();
     };
 
-    const handleDoctorRecovered = (data) => {
+    const handleDoctorRecovered = () => {
       refetch();
     };
 
-    const handleDoctorPasswordReset = (data) => {
+    const handleDoctorPasswordReset = () => {
       refetch();
     };
 
-    const handleDoctorPasswordChanged = (data) => {
+    const handleDoctorPasswordChanged = () => {
       refetch();
     };
 
-    const handleDoctorPasswordChangedByAdmin = (data) => {
+    const handleDoctorPasswordChangedByAdmin = () => {
       refetch();
     };
 
@@ -237,43 +189,16 @@ const NotificationsPage = () => {
 
   const handleMarkAsRead = async (notificationId) => {
     try {
-      let updateBody = {};
-
-      if (userRole === "hospital") {
-        updateBody = {
-          hospitalReadStatus: {
-            [hospitalId]: true
-          }
-        };
-      } else if (userRole === "doctor") {
-        updateBody = {
-          doctorReadStatus: {
-            [entityId]: true
-          }
-        };
-      } else if (userRole === "staff") {
-        updateBody = {
-          staffReadStatus: {
-            [entityId]: true
-          }
-        };
-      }
-
-      await updateNotification({
-        id: notificationId,
-        body: updateBody
-      }).unwrap();
-
-      socket.emit("notification_read", {
-        notificationId: notificationId,
-        hospitalId: hospitalId,
+      await markAsRead({
+        notificationId,
+        role,
         userId: entityId,
-        userRole: userRole
-      });
+      }).unwrap();
 
       await refetch();
       showSuccessToast("Notification marked as read", 2000);
-    } catch {
+    } catch (error) {
+      console.error(error);
       showErrorToast("Failed to mark as read", 2000);
     }
   };
@@ -287,45 +212,35 @@ const NotificationsPage = () => {
   const handleMarkAllAsRead = async () => {
     try {
       if (!unreadNotifications.length) {
-        showSuccessToast("No unread notifications to mark", 2000);
+        showSuccessToast("No unread notifications", 2000);
         return;
       }
 
-      const notificationIds = unreadNotifications.map(n => n.id);
-
-      if (userRole === "hospital") {
-        await markAllAsReadHospital({
-          hospitalId: Number(hospitalId),
-          notificationIds,
-        }).unwrap();
-      } else if (userRole === "doctor" || userRole === "staff") {
-        await markAllAsReadRole({
-          role: userRole,
-          userId: entityId,
-          notificationIds,
-        }).unwrap();
-      }
-
-      socket.emit("notifications_read_all", {
-        hospitalId: hospitalId,
+      await markAllAsRead({
+        role,
         userId: entityId,
-        userRole: userRole,
-        count: notificationIds.length
-      });
+      }).unwrap();
 
       await refetch();
-      showSuccessToast(`All ${notificationIds.length} notifications marked as read`, 2000);
-    } catch {
+      showSuccessToast("All notifications marked as read", 2000);
+    } catch (error) {
+      console.error(error);
       showErrorToast("Failed to mark all as read", 2000);
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      await deleteNotification(id).unwrap();
+      await deleteNotification({
+        id,
+        role,
+        userId: entityId,
+      }).unwrap();
+
+      await refetch();
       showSuccessToast("Notification deleted successfully", 2000);
-      refetch();
     } catch (error) {
+      console.error(error);
       showErrorToast("Failed to delete notification", 2000);
     }
   };
@@ -341,37 +256,31 @@ const NotificationsPage = () => {
 
   const confirmDelete = async () => {
     try {
-      if (selectedNotificationId === 'all') {
-        const deletePromises = notifications.map(notification => 
-          deleteNotification(notification.id).unwrap()
-        );
-        await Promise.all(deletePromises);
-
-        socket.emit("notifications_deleted_all", {
-          hospitalId: hospitalId,
+      if (selectedNotificationId === "all") {
+        await deleteAllNotifications({
+          role,
           userId: entityId,
-          userRole: userRole
-        });
+        }).unwrap();
 
-        showSuccessToast('All notifications deleted successfully', 2000);
+        setCurrentPage(1);
+        showSuccessToast("All notifications deleted successfully", 2000);
       } else {
-        await deleteNotification(selectedNotificationId).unwrap();
-
-        socket.emit("notification_deleted", {
-          notificationId: selectedNotificationId,
-          hospitalId: hospitalId,
+        await deleteNotification({
+          id: selectedNotificationId,
+          role,
           userId: entityId,
-          userRole: userRole
-        });
+        }).unwrap();
 
         if (filteredNotifications.length === 1 && currentPage > 1) {
           setCurrentPage(currentPage - 1);
         }
       }
+
       await refetch();
       setShowDeleteConfirm(false);
       setSelectedNotificationId(null);
     } catch (error) {
+      console.error(error);
       showErrorToast('Failed to delete notification(s)', 2000);
     }
   };
@@ -434,7 +343,7 @@ const NotificationsPage = () => {
     }
   };
 
-  if (isLoading()) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#F8F9FA] p-6 font-sans">
         <div className="mb-6">
@@ -586,8 +495,8 @@ const NotificationsPage = () => {
           <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications found</h3>
           <p className="text-gray-500">
-            {typeFilter !== 'all' || statusFilter !== 'all' 
-              ? 'Try adjusting your filters' 
+            {typeFilter !== 'all' || statusFilter !== 'all'
+              ? 'Try adjusting your filters'
               : "You're all caught up!"}
           </p>
           {(typeFilter !== 'all' || statusFilter !== 'all') && (
@@ -604,13 +513,13 @@ const NotificationsPage = () => {
               <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded ml-2">{filteredNotifications.length}</span>
             </h2>
           </div>
-          
+
           <div className="flex flex-col min-h-[420px]">
             <div className="divide-y divide-gray-100">
               {filteredNotifications.map((notif) => {
                 const typeInfo = getTypeInfo(notif.type);
                 const isUnread = isNotificationUnread(notif);
-                
+
                 return (
                   <div
                     key={notif.id}
@@ -627,7 +536,7 @@ const NotificationsPage = () => {
                           {getIcon(notif.type)}
                         </div>
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1">
@@ -660,7 +569,7 @@ const NotificationsPage = () => {
                               )}
                             </div>
                           </div>
-                          
+
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <button
                               onClick={(e) => {
@@ -680,7 +589,7 @@ const NotificationsPage = () => {
                 );
               })}
             </div>
-            
+
             <div className="mt-auto px-6 py-3 bg-white border-t border-gray-100">
               <Pagination
                 currentPage={currentPage}
@@ -701,7 +610,7 @@ const NotificationsPage = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Confirm Deletion</h3>
-                <button 
+                <button
                   onClick={cancelDelete}
                   className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
                 >
@@ -709,7 +618,7 @@ const NotificationsPage = () => {
                 </button>
               </div>
               <p className="text-gray-600 mb-6">
-                {selectedNotificationId === 'all' 
+                {selectedNotificationId === 'all'
                   ? 'Are you sure you want to delete all notifications? This action cannot be undone.'
                   : 'Are you sure you want to delete this notification? This action cannot be undone.'
                 }

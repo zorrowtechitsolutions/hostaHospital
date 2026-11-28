@@ -1,15 +1,13 @@
-// src/components/layout/NotificationPanel.jsx - FIXED for staff
+// src/components/layout/NotificationPanel.jsx
 import React, { useState, useEffect } from 'react';
 import { Bell, Trash2, CheckCheck, X, Eye } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import {
-  useGetNotificationsByHospitalQuery,
   useGetNotificationsByRoleQuery,
-  useMarkAllNotificationsAsReadByHospitalMutation,
+  useMarkNotificationAsReadMutation,
   useMarkAllNotificationsAsReadMutation,
   useDeleteNotificationMutation,
-  useUpdateNotificationMutation,
 } from '../../app/service/notification';
 import { showSuccessToast, showErrorToast } from '../components/ui/Toast';
 import { socket } from '../socket/socket';
@@ -26,121 +24,76 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
   const [selectedNotificationId, setSelectedNotificationId] = useState(null);
   const [eventsRegistered, setEventsRegistered] = useState(false);
   const [localUnreadCount, setLocalUnreadCount] = useState(0);
-  
+
   const auth = getAuthUser();
   const userRole = getUserRole();
   const hospitalId = getHospitalId();
 
-  // Get the correct entity ID based on role
-  const getEntityId = () => {
-    if (userRole === "doctor") {
-      return auth?.doctorId || auth?.id;
-    }
-    if (userRole === "staff") {
-      return auth?.staffId || auth?.id;
-    }
-    return null;
-  };
+  const entityId =
+    userRole === "hospital"
+      ? hospitalId
+      : userRole === "doctor"
+      ? auth?.doctorId || auth?.id
+      : userRole === "staff"
+      ? auth?.staffId || auth?.id
+      : auth?.id;
 
-  const entityId = getEntityId();
+  const role = userRole === "super_admin" ? "superadmin" : userRole;
 
-  // Hospital notifications - ONLY for hospital admin
-  const hospitalQuery = useGetNotificationsByHospitalQuery(
+  const {
+    data: notificationResponse,
+    isLoading,
+    error,
+    refetch,
+  } = useGetNotificationsByRoleQuery(
+    { role, id: entityId, page: 1, limit: 10 },
     {
-      hospitalId,
-    },
-    {
-      skip: userRole !== "hospital", // Only fetch for hospital admin
+      skip: !role || !entityId,
       refetchOnMountOrArgChange: true,
     }
   );
 
-  // Role-based notifications - for doctors AND staff
-  const roleQuery = useGetNotificationsByRoleQuery(
-    {
-      role: userRole,
-      id: entityId,
-    },
-    {
-      skip: userRole !== "doctor" && userRole !== "staff",
-      refetchOnMountOrArgChange: true,
-    }
-  );
+  const notifications = Array.isArray(notificationResponse?.data)
+    ? notificationResponse.data
+    : notificationResponse?.data?.rows || [];
 
-  // Select notifications based on role
-  let notifications = [];
-
-  if (userRole === "hospital") {
-    notifications = hospitalQuery.data?.data || [];
-  } else if (userRole === "doctor" || userRole === "staff") {
-    // Staff and doctors ONLY get their role-specific notifications
-    notifications = roleQuery.data?.data || [];
-  }
-
-  // ✅ ONLY SHOW LATEST 10 NOTIFICATIONS IN THE PANEL
-  const MAX_VISIBLE_NOTIFICATIONS = 10;
-  const displayedNotifications = notifications.slice(0, MAX_VISIBLE_NOTIFICATIONS);
-
-  const isLoading = () => {
-    if (userRole === "hospital") {
-      return hospitalQuery.isLoading;
-    } else if (userRole === "doctor" || userRole === "staff") {
-      return roleQuery.isLoading;
-    }
-    return false;
-  };
-
-  const error = () => {
-    if (userRole === "hospital") {
-      return hospitalQuery.error;
-    } else if (userRole === "doctor" || userRole === "staff") {
-      return roleQuery.error;
-    }
-    return null;
-  };
-
-  const refetch = () => {
-    if (userRole === "hospital") {
-      hospitalQuery.refetch();
-    } else if (userRole === "doctor" || userRole === "staff") {
-      roleQuery.refetch();
-    }
-  };
-
-  const [markAllAsReadHospital] = useMarkAllNotificationsAsReadByHospitalMutation();
-  const [markAllAsReadRole] = useMarkAllNotificationsAsReadMutation();
+  const [markAsRead] = useMarkNotificationAsReadMutation();
+  const [markAllAsRead] = useMarkAllNotificationsAsReadMutation();
   const [deleteNotification] = useDeleteNotificationMutation();
-  const [updateNotification] = useUpdateNotificationMutation();
 
-  // Check if notification is unread based on role
   const isNotificationUnread = (notification) => {
-    if (userRole === "hospital") {
-      return !notification.hospitalReadStatus?.[hospitalId];
-    } else if (userRole === "doctor") {
-      return !notification.doctorReadStatus?.[entityId];
-    } else if (userRole === "staff") {
-      return !notification.staffReadStatus?.[entityId];
-    }
-    return false;
+    const statusField = {
+      hospital: "hospitalReadStatus",
+      doctor: "doctorReadStatus",
+      staff: "staffReadStatus",
+      user: "userReadStatus",
+      pharmacy: "pharmacyReadStatus",
+      lab: "labReadStatus",
+      superadmin: "superAdminReadStatus",
+    }[role];
+
+    return statusField
+      ? notification[statusField]?.[String(entityId)] !== true
+      : false;
   };
 
-  const unreadNotifications = notifications.filter(notification => 
-    isNotificationUnread(notification)
-  );
-
+  const unreadNotifications = notifications.filter(isNotificationUnread);
   const unreadCount = unreadNotifications.length;
+
+  const displayedNotifications = notifications.slice(0, 10);
+  const MAX_VISIBLE_NOTIFICATIONS = 10;
 
   useEffect(() => {
     if (unreadCount !== localUnreadCount) {
       setLocalUnreadCount(unreadCount);
       socket.emit("unread_count_updated", {
         count: unreadCount,
-        userRole: userRole,
+        userRole: role,
         hospitalId: hospitalId,
         entityId: entityId
       });
     }
-  }, [unreadCount, localUnreadCount, userRole, hospitalId, entityId]);
+  }, [unreadCount, localUnreadCount, role, hospitalId, entityId]);
 
   useEffect(() => {
     if (onUnreadCountChange) {
@@ -150,39 +103,39 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   // Register socket event listeners
   useEffect(() => {
-    const handleNotificationCreated = (data) => {
+    const handleNotificationCreated = () => {
       refetch();
     };
 
-    const handleNotificationRead = (data) => {
+    const handleNotificationRead = () => {
       refetch();
     };
 
-    const handleDoctorRegistered = (data) => {
+    const handleDoctorRegistered = () => {
       refetch();
     };
 
-    const handleDoctorUpdated = (data) => {
+    const handleDoctorUpdated = () => {
       refetch();
     };
 
-    const handleDoctorDeleted = (data) => {
+    const handleDoctorDeleted = () => {
       refetch();
     };
 
-    const handleDoctorRecovered = (data) => {
+    const handleDoctorRecovered = () => {
       refetch();
     };
 
-    const handleDoctorPasswordReset = (data) => {
+    const handleDoctorPasswordReset = () => {
       refetch();
     };
 
-    const handleDoctorPasswordChanged = (data) => {
+    const handleDoctorPasswordChanged = () => {
       refetch();
     };
 
-    const handleDoctorPasswordChangedByAdmin = (data) => {
+    const handleDoctorPasswordChangedByAdmin = () => {
       refetch();
     };
 
@@ -236,40 +189,12 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   const handleMarkAsRead = async (notificationId) => {
     try {
-      let updateBody = {};
-
-      if (userRole === "hospital") {
-        updateBody = {
-          hospitalReadStatus: {
-            [hospitalId]: true
-          }
-        };
-      } else if (userRole === "doctor") {
-        updateBody = {
-          doctorReadStatus: {
-            [entityId]: true
-          }
-        };
-      } else if (userRole === "staff") {
-        updateBody = {
-          staffReadStatus: {
-            [entityId]: true
-          }
-        };
-      }
-
-      await updateNotification({
-        id: notificationId,
-        body: updateBody
-      }).unwrap();
-      
-      socket.emit("notification_read", {
-        notificationId: notificationId,
-        hospitalId: hospitalId,
+      await markAsRead({
+        notificationId,
+        role,
         userId: entityId,
-        userRole: userRole
-      });
-      
+      }).unwrap();
+
       await refetch();
       setLocalUnreadCount(prev => Math.max(0, prev - 1));
       showSuccessToast("Notification marked as read", 2000);
@@ -293,27 +218,10 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
         return;
       }
 
-      const notificationIds = unreadNotifications.map(notification => notification.id);
-
-      if (userRole === "hospital") {
-        await markAllAsReadHospital({
-          hospitalId: Number(hospitalId),
-          notificationIds,
-        }).unwrap();
-      } else if (userRole === "doctor" || userRole === "staff") {
-        await markAllAsReadRole({
-          role: userRole,
-          userId: entityId,
-          notificationIds,
-        }).unwrap();
-      }
-
-      socket.emit("notifications_read_all", {
-        hospitalId: hospitalId,
+      await markAllAsRead({
+        role,
         userId: entityId,
-        userRole: userRole,
-        count: notificationIds.length
-      });
+      }).unwrap();
 
       await refetch();
       setLocalUnreadCount(0);
@@ -332,22 +240,19 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
   const confirmDelete = async () => {
     try {
-      await deleteNotification(selectedNotificationId).unwrap();
-      
-      socket.emit("notification_deleted", {
-        notificationId: selectedNotificationId,
-        hospitalId: hospitalId,
+      await deleteNotification({
+        id: selectedNotificationId,
+        role,
         userId: entityId,
-        userRole: userRole
-      });
-      
+      }).unwrap();
+
       await refetch();
-      
+
       const deletedNotif = notifications.find(n => n.id === selectedNotificationId);
       if (deletedNotif && isNotificationUnread(deletedNotif)) {
         setLocalUnreadCount(prev => Math.max(0, prev - 1));
       }
-      
+
       showSuccessToast('Notification deleted successfully', 2000);
       setShowDeleteConfirm(false);
       setSelectedNotificationId(null);
@@ -389,37 +294,35 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
     }
   };
 
-  const currentError = error();
-  
   if (!isOpen) return null;
 
   return (
     <>
-<div
-  className="
-    fixed
-    top-[60px]
-    left-2
-    right-2
-    w-auto
-    max-w-none
-    bg-white dark:bg-gray-800
-    rounded-xl
-    shadow-2xl
-    border border-gray-200 dark:border-gray-700
-    overflow-hidden
-    z-50
+      <div
+        className="
+          fixed
+          top-[60px]
+          left-2
+          right-2
+          w-auto
+          max-w-none
+          bg-white dark:bg-gray-800
+          rounded-xl
+          shadow-2xl
+          border border-gray-200 dark:border-gray-700
+          overflow-hidden
+          z-50
 
-    sm:absolute
-    sm:top-auto
-    sm:left-auto
-    sm:right-0
-    sm:mt-2
-    sm:w-96
-    sm:max-w-96
-  "
->
-          {/* Header */}
+          sm:absolute
+          sm:top-auto
+          sm:left-auto
+          sm:right-0
+          sm:mt-2
+          sm:w-96
+          sm:max-w-96
+        "
+      >
+        {/* Header */}
         <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex justify-between items-center">
             <div>
@@ -430,7 +333,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
             </div>
             <div className="flex items-center gap-3">
               {unreadCount > 0 && (
-                <button 
+                <button
                   onClick={handleMarkAllAsRead}
                   className="text-xs text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 flex items-center gap-1 transition-colors"
                 >
@@ -447,21 +350,21 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
         {/* Notifications List */}
         <div className="max-h-[400px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700">
-          {isLoading() ? (
+          {isLoading ? (
             <div className="px-5 py-8 text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-3"></div>
               <p className="text-gray-500 dark:text-gray-400">Loading notifications...</p>
             </div>
-          ) : currentError ? (
+          ) : error ? (
             <div className="px-5 py-8 text-center">
               <p className="text-red-500 dark:text-red-400">Error loading notifications</p>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {currentError?.data?.message || currentError?.message || 'Please try again'}
+                {error?.data?.message || error?.message || 'Please try again'}
               </p>
               <p className="text-xs text-gray-400 mt-2">
-                Role: {userRole} | ID: {entityId || 'Not found'}
+                Role: {role} | ID: {entityId || 'Not found'}
               </p>
-              <button 
+              <button
                 onClick={() => refetch && refetch()}
                 className="mt-3 text-sm text-purple-600 hover:text-purple-700 font-medium"
               >
@@ -475,14 +378,13 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
               <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
             </div>
           ) : (
-            // ✅ ONLY RENDER THE LATEST 10 NOTIFICATIONS
             displayedNotifications.map((notif) => {
               const typeInfo = getNotificationType(notif.type);
               const isUnread = isNotificationUnread(notif);
-              
+
               return (
-                <div 
-                  key={notif.id} 
+                <div
+                  key={notif.id}
                   onClick={() => handleNotificationClick(notif)}
                   className={`group relative px-5 py-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-all duration-200 cursor-pointer ${
                     isUnread ? 'bg-purple-50 dark:bg-purple-900/20' : ''
@@ -492,7 +394,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
                     {isUnread && (
                       <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0"></div>
                     )}
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
@@ -513,8 +415,8 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
                         </div>
                       </div>
                     </div>
-                    
-                    <button 
+
+                    <button
                       onClick={(e) => handleDeleteClick(notif.id, e)}
                       className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-all flex-shrink-0"
                     >
@@ -529,13 +431,13 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-          <button 
+          <button
             onClick={handleViewAll}
             className="w-full text-center text-sm text-purple-600 hover:text-purple-700 dark:text-purple-400 dark:hover:text-purple-300 font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Eye size={14} />
-            {notifications.length > MAX_VISIBLE_NOTIFICATIONS 
-              ? `View All ${notifications.length} Notifications` 
+            {notifications.length > MAX_VISIBLE_NOTIFICATIONS
+              ? `View All ${notifications.length} Notifications`
               : 'View All Notifications'}
           </button>
         </div>
@@ -547,7 +449,7 @@ const NotificationPanel = ({ isOpen, onClose, onUnreadCountChange }) => {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-96 p-6 animate-in fade-in zoom-in duration-200">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Confirm Deletion</h3>
-              <button 
+              <button
                 onClick={cancelDelete}
                 className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
