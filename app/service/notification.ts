@@ -57,7 +57,7 @@ export interface GetNotificationsParams {
 
 export interface NotificationsResponse {
   success: boolean;
-  data: Notification[];
+  data: Notification[] | { rows: Notification[]; count?: number };
   total: number;
   page: number;
   totalPages: number;
@@ -84,7 +84,7 @@ export interface MarkReadResponse {
 
 export interface RoleNotificationsResponse {
   success: boolean;
-  data: Notification[];
+  data: Notification[] | { rows: Notification[]; count?: number };
   count?: number;
   error?: null;
 }
@@ -106,14 +106,16 @@ export const notificationApi = api.injectEndpoints({
         if (params.role) queryParams.append('role', params.role);
         if (params.hospitalId) queryParams.append('hospitalId', params.hospitalId.toString());
         if (params.isRead !== undefined) queryParams.append('isRead', params.isRead.toString());
-        
+
         const queryString = queryParams.toString();
         return `/notification${queryString ? `?${queryString}` : ''}`;
       },
-      providesTags: (result) => 
+      providesTags: (result) =>
         result
           ? [
-              ...result.data.map(({ id }) => ({ type: 'Notification' as const, id })),
+              ...(Array.isArray(result.data)
+                ? result.data.map(({ id }) => ({ type: 'Notification' as const, id }))
+                : []),
               { type: 'Notifications', id: 'LIST' },
             ]
           : [{ type: 'Notifications', id: 'LIST' }],
@@ -128,31 +130,12 @@ export const notificationApi = api.injectEndpoints({
       NotificationsResponse,
       { role: string; id: number; page?: number; limit?: number }
     >({
-      query: ({ role, id, page, limit }) => {
-        const queryParams = new URLSearchParams();
-
-        if (page) queryParams.append("page", page.toString());
-        if (limit) queryParams.append("limit", limit.toString());
-
-        const queryString = queryParams.toString();
-
-        return `/notification/${role}/${id}${
-          queryString ? `?${queryString}` : ""
-        }`;
-      },
-
+      query: ({ role, id, page = 1, limit = 10 }) => ({
+        url: `/notification/${role}/${id}`,
+        method: "GET",
+        params: { page, limit },
+      }),
       providesTags: [{ type: "Notifications", id: "BY_ROLE" }],
-    }),
-
-    getNotificationsByHospital: builder.query<NotificationsResponse, { hospitalId: number; page?: number; limit?: number }>({
-      query: ({ hospitalId, page, limit }) => {
-        const queryParams = new URLSearchParams();
-        if (page) queryParams.append('page', page.toString());
-        if (limit) queryParams.append('limit', limit.toString());
-        const queryString = queryParams.toString();
-        return `/notification/hospital/${hospitalId}${queryString ? `?${queryString}` : ''}`;
-      },
-      providesTags: [{ type: 'Notifications', id: 'BY_HOSPITAL' }],
     }),
 
     getReadNotifications: builder.query<RoleNotificationsResponse, { role: string; id: number }>({
@@ -181,7 +164,7 @@ export const notificationApi = api.injectEndpoints({
         body,
       }),
       invalidatesTags: (result, error, { id }) => [
-        { type: 'Notification', id }, 
+        { type: 'Notification', id },
         { type: 'Notifications', id: 'LIST' }
       ],
     }),
@@ -199,63 +182,52 @@ export const notificationApi = api.injectEndpoints({
         { type: 'Notifications', id: 'LIST' },
         { type: 'Notifications', id: 'READ' },
         { type: 'Notifications', id: 'UNREAD' },
-      ],
-    }),
-
-    markAllNotificationsAsReadByHospital: builder.mutation<
-      MarkReadResponse,
-      { hospitalId: number; notificationIds: number[] }
-    >({
-      query: ({ hospitalId, notificationIds }) => ({
-        url: `/notification/read-all/hospital/${hospitalId}`,
-        method: 'PUT',
-        body: { notificationIds },
-      }),
-      invalidatesTags: [
-        { type: 'Notifications', id: 'LIST' },
-        { type: 'Notifications', id: 'READ' },
-        { type: 'Notifications', id: 'UNREAD' },
-        { type: 'Notifications', id: 'BY_HOSPITAL' },
+        { type: 'Notifications', id: 'BY_ROLE' },
       ],
     }),
 
     markAllNotificationsAsRead: builder.mutation<
       MarkReadResponse,
-      { role: string; userId: number; notificationIds: number[] }
+      { role: string; userId: number }
     >({
-      query: ({ role, userId, notificationIds }) => ({
+      query: ({ role, userId }) => ({
         url: `/notification/read-all/${role}/${userId}`,
         method: 'PUT',
-        body: { notificationIds },
       }),
       invalidatesTags: [
         { type: 'Notifications', id: 'LIST' },
         { type: 'Notifications', id: 'READ' },
         { type: 'Notifications', id: 'UNREAD' },
         { type: 'Notifications', id: 'BY_ROLE' },
-        { type: 'Notifications', id: 'BY_HOSPITAL' },
       ],
     }),
 
-    deleteNotification: builder.mutation<{ success: boolean; message: string }, number>({
-      query: (id) => ({
-        url: `/notification/${id}`,
+    deleteNotification: builder.mutation<
+      { success: boolean; message: string },
+      { id: number; role: string; userId: number }
+    >({
+      query: ({ id, role, userId }) => ({
+        url: `/notification/${id}/${role}/${userId}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (result, error, id) => [
-        { type: 'Notification', id }, 
-        { type: 'Notifications', id: 'LIST' }
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Notification', id },
+        { type: 'Notifications', id: 'LIST' },
+        { type: 'Notifications', id: 'BY_ROLE' },
       ],
     }),
 
-    deleteNotificationsByHospital: builder.mutation<{ success: boolean; message: string; data: { deletedCount: number } }, number>({
-      query: (hospitalId) => ({
-        url: `/notification/hospital/${hospitalId}`,
+    deleteAllNotifications: builder.mutation<
+      { success: boolean; message: string; data: { deletedCount: number } },
+      { role: string; userId: number }
+    >({
+      query: ({ role, userId }) => ({
+        url: `/notification/delete-all/${role}/${userId}`,
         method: 'DELETE',
       }),
       invalidatesTags: [
-        { type: 'Notifications', id: 'LIST' }, 
-        { type: 'Notifications', id: 'BY_HOSPITAL' }
+        { type: 'Notifications', id: 'LIST' },
+        { type: 'Notifications', id: 'BY_ROLE' },
       ],
     }),
 
@@ -280,15 +252,13 @@ export const {
   useGetNotificationsQuery,
   useGetNotificationByIdQuery,
   useGetNotificationsByRoleQuery,
-  useGetNotificationsByHospitalQuery,
   useGetReadNotificationsQuery,
   useGetUnreadNotificationsQuery,
   useCreateNotificationMutation,
   useUpdateNotificationMutation,
   useMarkNotificationAsReadMutation,
   useMarkAllNotificationsAsReadMutation,
-  useMarkAllNotificationsAsReadByHospitalMutation,
   useDeleteNotificationMutation,
-  useDeleteNotificationsByHospitalMutation,
+  useDeleteAllNotificationsMutation,
   useToggleNotificationStatusMutation,
 } = notificationApi;

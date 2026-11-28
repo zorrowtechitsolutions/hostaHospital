@@ -176,9 +176,7 @@ const DocumentsTab = ({ patient }) => {
 
     registerDocumentEvents({
       onRegistered: async ({ message, data }) => {
-        // Only handle events for THIS patient
         if (data?.patientId && String(data.patientId) !== String(patient.id)) return;
-        // Optional: filter by hospital
         if (
           data?.hospitalId &&
           hospitalId &&
@@ -357,7 +355,6 @@ const DocumentsTab = ({ patient }) => {
   };
 
   const handleUpload = async () => {
-    // Validate form
     if (!documentName.trim()) {
       showWarningToast("Please enter a document name");
       return;
@@ -382,7 +379,6 @@ const DocumentsTab = ({ patient }) => {
     setUploadProgress(0);
 
     try {
-      // ✅ STEP 1: Create document in database (without file)
       const documentData = {
         patientId: patient.id,
         name: documentName.trim(),
@@ -411,7 +407,6 @@ const DocumentsTab = ({ patient }) => {
 
       setUploadProgress(30);
 
-      // ✅ STEP 2: Upload file to S3
       const timestamp = Date.now();
       const safeFileName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const fileKey = `documents/${documentId}/${timestamp}_${safeFileName}`;
@@ -425,7 +420,6 @@ const DocumentsTab = ({ patient }) => {
 
       setUploadProgress(80);
 
-      // ✅ STEP 3: Update document with file info
       const updateData = {
         fileKey: s3Result.key,
         fileUrl: s3Result.imageUrl,
@@ -447,7 +441,6 @@ const DocumentsTab = ({ patient }) => {
 
       showSuccessToast(` Document "${documentName}" uploaded successfully!`);
       
-      // Reset form
       setDocumentName("");
       setDocumentDate("");
       setSelectedFile(null);
@@ -653,7 +646,6 @@ const DocumentsTab = ({ patient }) => {
     setShowViewModal(true);
   };
 
-  // ✅ FIX: await the async signed-URL resolution before opening
   const handleDownloadDocument = async (item) => {
     try {
       const fileKey =
@@ -677,6 +669,42 @@ const DocumentsTab = ({ patient }) => {
     } catch (error) {
       console.error("Download error:", error);
       showErrorToast("Failed to open document");
+    }
+  };
+
+  // ✅ Downloads the already-resolved signed URL as a blob (used by the new modal)
+  const handleDownloadDocumentFile = async (document, url) => {
+    if (!url) return;
+
+    const fileName =
+      document?.fileName ||
+      document?.documentName ||
+      document?.name ||
+      "document";
+
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error("Failed to download file");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName;
+
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      console.error("Download error:", error);
+      // Fallback: just open the signed URL
+      window.open(url, "_blank", "noopener,noreferrer");
     }
   };
 
@@ -1057,177 +1085,275 @@ const DocumentsTab = ({ patient }) => {
         </div>
       )}
 
-      {/* VIEW MODAL */}
+      {/* ============ COMPACT DOCUMENT VIEW MODAL ============ */}
       {showViewModal && viewingDocument && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-5xl w-full max-h-[95vh] overflow-hidden">
-            <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50">
-              <h3 className="text-lg font-semibold text-gray-800 truncate">
-                {viewingDocument.documentName || viewingDocument.name}
-              </h3>
-              <button
-                onClick={resetViewForm}
-                className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-              >
-                <X size={20} className="text-gray-500" />
-              </button>
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-xl rounded-xl shadow-xl overflow-hidden max-h-[88vh] flex flex-col">
+            {/* HEADER */}
+            <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+                  <FileText size={21} className="text-[#1C62A0]" />
+                </div>
+
+                <div className="min-w-0">
+                  <h2 className="text-base font-semibold text-gray-800">
+                    Document Details
+                  </h2>
+                  <p className="text-xs text-gray-500 truncate">
+                    {viewingDocument.documentName || viewingDocument.name}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1 shrink-0">
+                {viewingFileUrl && (
+                  <>
+                    <button
+                      onClick={() =>
+                        window.open(viewingFileUrl, "_blank", "noopener,noreferrer")
+                      }
+                      className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+                      title="Open in new tab"
+                    >
+                      <ExternalLink size={17} />
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        handleDownloadDocumentFile(
+                          viewingDocument,
+                          viewingFileUrl
+                        )
+                      }
+                      className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+                      title="Download"
+                    >
+                      <Download size={17} />
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={resetViewForm}
+                  className="p-2 rounded-lg text-gray-500 hover:bg-gray-100"
+                >
+                  <X size={19} />
+                </button>
+              </div>
             </div>
 
-            <div className="p-6 overflow-y-auto max-h-[75vh]">
-              <div className="flex flex-col items-center">
-                {(() => {
-                  // ✅ FIX: use the async-resolved signed URL from state
-                  const fileUrl = viewingFileUrl;
+            {/* BODY */}
+            <div className="p-5 overflow-y-auto space-y-5">
+              {/* FILE PREVIEW */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs font-semibold text-gray-600">
+                    ATTACHED DOCUMENT
+                  </p>
+                  <span className="text-xs text-gray-400">
+                    {viewingDocument.fileSize || ""}
+                  </span>
+                </div>
 
-                  if (isResolvingFileUrl) {
-                    return (
-                      <div className="flex items-center justify-center p-12 w-full">
-                        <div className="animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-                        <span className="ml-3 text-gray-600">
-                          Loading document...
-                        </span>
-                      </div>
-                    );
-                  }
+                <div className="h-56 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden p-2">
+                  {isResolvingFileUrl ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="animate-spin rounded-full h-7 w-7 border-2 border-[#1C62A0] border-t-transparent" />
+                      <span className="text-xs text-gray-500">
+                        Loading document...
+                      </span>
+                    </div>
+                  ) : !viewingFileUrl ? (
+                    <div className="text-center text-gray-400">
+                      <FileText size={36} className="mx-auto mb-2" />
+                      <p className="text-xs">No file available</p>
+                    </div>
+                  ) : (() => {
+                    const fileName =
+                      viewingDocument.fileName ||
+                      viewingDocument.documentName ||
+                      viewingDocument.name ||
+                      "Document";
 
-                  if (!fileUrl) {
-                    return (
-                      <div className="flex flex-col items-center justify-center p-12 bg-gray-100 rounded-lg w-full">
-                        <File size={64} className="text-gray-400 mb-4" />
-                        <p className="text-gray-600">No file attached</p>
-                      </div>
-                    );
-                  }
+                    const fileType =
+                      viewingDocument.fileType ||
+                      viewingDocument.contentType ||
+                      "";
 
-                  const isPdf = fileUrl.toLowerCase().endsWith('.pdf') || 
-                               viewingDocument.fileType === 'application/pdf' ||
-                               viewingDocument.type === 'PDF';
+                    const isPdf =
+                      fileType === "application/pdf" ||
+                      viewingDocument.type === "PDF" ||
+                      /\.pdf(\?.*)?$/i.test(fileName) ||
+                      /\.pdf(\?.*)?$/i.test(viewingFileUrl);
 
-                  if (isPdf) {
-                    return (
-                      <div className="w-full">
+                    const isImg =
+                      fileType.startsWith("image/") ||
+                      /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(fileName) ||
+                      /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(viewingFileUrl);
+
+                    if (isPdf) {
+                      return (
                         <iframe
-                          src={`${fileUrl}#navpanes=0&scrollbar=1&toolbar=1`}
-                          className="w-full h-[600px] border-0 rounded-lg"
-                          title="PDF Preview"
+                          src={`${viewingFileUrl}#toolbar=0&navpanes=0`}
+                          title="Document Preview"
+                          className="w-full h-full rounded border-0 bg-white"
                         />
-                        <div className="mt-4 flex justify-center gap-4">
-                          <a
-                            href={fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
-                          >
-                            <ExternalLink size={16} />
-                            Open PDF in New Tab
-                          </a>
-                          <button
-                            onClick={() => handleDownloadDocument(viewingDocument)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                          >
-                            <Download size={16} />
-                            Download
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
+                      );
+                    }
 
-                  const isImg = fileUrl.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i) ||
-                               viewingDocument.fileType?.startsWith('image/');
-
-                  if (isImg) {
-                    return (
-                      <div className="w-full flex flex-col items-center">
+                    if (isImg) {
+                      return (
                         <img
-                          src={fileUrl}
-                          alt={viewingDocument.documentName || viewingDocument.name}
-                          className="max-h-[600px] mx-auto object-contain rounded-lg shadow-lg"
+                          src={viewingFileUrl}
+                          alt={fileName}
+                          className="max-w-full max-h-full object-contain rounded"
                         />
-                        <div className="mt-4 flex justify-center gap-4">
-                          <a
-                            href={fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                          >
-                            <ExternalLink size={16} />
-                            Open in New Tab
-                          </a>
-                          <button
-                            onClick={() => handleDownloadDocument(viewingDocument)}
-                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                          >
-                            <Download size={16} />
-                            Download
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
+                      );
+                    }
 
-                  return (
-                    <div className="flex flex-col items-center justify-center p-12 bg-gray-50 rounded-lg w-full">
-                      <File size={64} className="text-blue-500 mb-4" />
-                      <p className="text-lg font-medium text-gray-700 mb-2">Document</p>
-                      <p className="text-sm text-gray-500 mb-4">
-                        {viewingDocument.fileName || viewingDocument.name}
-                      </p>
-                      <div className="flex gap-4">
-                        <a
-                          href={fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                        >
-                          <ExternalLink size={16} />
-                          Open Document
-                        </a>
+                    return (
+                      <div className="text-center">
+                        <FileText size={38} className="mx-auto mb-2 text-[#1C62A0]" />
+                        <p className="text-sm font-medium text-gray-700">
+                          {fileName}
+                        </p>
                         <button
-                          onClick={() => handleDownloadDocument(viewingDocument)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                          onClick={() =>
+                            window.open(
+                              viewingFileUrl,
+                              "_blank",
+                              "noopener,noreferrer"
+                            )
+                          }
+                          className="mt-2 text-xs text-[#1C62A0] hover:underline"
                         >
-                          <Download size={16} />
-                          Download
+                          Open document
                         </button>
                       </div>
-                    </div>
-                  );
-                })()}
+                    );
+                  })()}
+                </div>
+              </div>
 
-                <div className="w-full mt-6 grid grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-lg">
+              {/* DOCUMENT INFORMATION */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                  Document Information
+                </h3>
+
+                <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                   <div>
-                    <span className="font-semibold text-gray-600">Name:</span>
-                    <span className="ml-2 text-gray-800">{viewingDocument.documentName || viewingDocument.name}</span>
+                    <p className="text-xs text-gray-500 mb-1">Document Name</p>
+                    <p className="text-sm font-medium text-gray-800 break-words">
+                      {viewingDocument.documentName || viewingDocument.name || "N/A"}
+                    </p>
                   </div>
+
                   <div>
-                    <span className="font-semibold text-gray-600">Date:</span>
-                    <span className="ml-2 text-gray-800">
-                      {viewingDocument.date ? new Date(viewingDocument.date).toLocaleDateString() : 'N/A'}
-                    </span>
+                    <p className="text-xs text-gray-500 mb-1">Document Date</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {viewingDocument.date
+                        ? new Date(viewingDocument.date).toLocaleDateString()
+                        : "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">File Type</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {viewingDocument.fileType ||
+                        viewingDocument.type ||
+                        "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">File Size</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {viewingDocument.fileSize || "N/A"}
+                    </p>
+                  </div>
+
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-500 mb-1">File Name</p>
+                    <p className="text-sm font-medium text-gray-800 break-all">
+                      {viewingDocument.fileName || "N/A"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* PATIENT INFORMATION */}
+              <div className="border-t border-gray-200 pt-4">
+                <h3 className="text-sm font-semibold text-gray-800 mb-3">
+                  Patient Information
+                </h3>
+
+                <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Patient Name</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {patient?.name || viewingDocument.patientName || "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Patient Number</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {patient?.patientNumber != null
+                        ? `#PT${String(patient.patientNumber).padStart(4, "0")}`
+                        : "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Hospital</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {viewingDocument.hospitalName ||
+                        patient?.hospitalName ||
+                        "N/A"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1">Uploaded By</p>
+                    <p className="text-sm font-medium text-gray-800">
+                      {viewingDocument.uploadedByName || "N/A"}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50">
+            {/* FOOTER */}
+            <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
               <button
                 onClick={resetViewForm}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100"
               >
                 Close
               </button>
-              <button
-                onClick={() => handleDownloadDocument(viewingDocument)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-              >
-                <Download size={16} />
-                Download
-              </button>
+
+              {viewingFileUrl && (
+                <button
+                  onClick={() =>
+                    handleDownloadDocumentFile(
+                      viewingDocument,
+                      viewingFileUrl
+                    )
+                  }
+                  className="px-4 py-2 text-sm bg-[#1C62A0] hover:bg-[#154f7a] text-white rounded-lg flex items-center gap-2"
+                >
+                  <Download size={15} />
+                  Download
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
+      {/* ============ END COMPACT DOCUMENT VIEW MODAL ============ */}
 
       {/* DELETE MODAL */}
       {showDeleteModal && deletingDocument && (
